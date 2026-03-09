@@ -1,4 +1,5 @@
-<main class="content">
+<template>
+  <main class="content">
     <form action="#" method="post">
 
       <div class="content__wrapper">
@@ -300,3 +301,4 @@
 
     </form>
   </main>
+</template>
