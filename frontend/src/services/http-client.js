@@ -1,4 +1,5 @@
 import axios from 'axios'
+import tokenService from './token-service'
 
 
 class HttpClient {
@@ -13,11 +14,11 @@ class HttpClient {
     this.setupInterceptors()
   }
 
-  
+
   setupInterceptors() {
     this.client.interceptors.request.use(
       (config) => {
-        const token = localStorage.getItem('token')
+        const token = tokenService.getToken()
         if (token) {
           config.headers.Authorization = `Bearer ${token}`
         }
@@ -38,11 +39,11 @@ class HttpClient {
     )
   }
 
-  
+
   handleError(error) {
     if (error.response) {
       const { status, data } = error.response
-      
+
       switch (status) {
         case 400:
           console.error('Ошибка запроса:', data.message || 'Неверные данные')
@@ -71,22 +72,22 @@ class HttpClient {
     return Promise.reject(error)
   }
 
-  
+
   get(url, config = {}) {
     return this.client.get(url, config)
   }
 
-  
+
   post(url, data = {}, config = {}) {
     return this.client.post(url, data, config)
   }
 
-  
+
   put(url, data = {}, config = {}) {
     return this.client.put(url, data, config)
   }
 
-  
+
   delete(url, config = {}) {
     return this.client.delete(url, config)
   }
