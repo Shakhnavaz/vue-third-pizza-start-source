@@ -4,23 +4,23 @@
       <div class="content__wrapper">
         <h1 class="title title--big">Конструктор пиццы</h1>
 
-        <!-- Шаг 1: Выбор теста -->
+
         <div class="content__dough">
           <DoughStep
-            :selected-dough-id="pizza.selectedDough?.id"
+            :selected-dough-id="currentPizza.doughId"
             @dough-changed="handleDoughChange"
           />
         </div>
 
-        <!-- Шаг 2: Выбор размера -->
+
         <div class="content__diameter">
           <SizeStep
-            :selected-size-id="pizza.selectedSize?.id"
+            :selected-size-id="currentPizza.sizeId"
             @size-changed="handleSizeChange"
           />
         </div>
 
-        <!-- Шаг 3: Выбор соуса и ингредиентов -->
+
         <div class="content__ingredients">
           <div class="sheet">
             <h2 class="title title--small sheet__title">
@@ -28,15 +28,15 @@
             </h2>
 
             <div class="sheet__content ingredients">
-              <!-- Выбор соуса -->
+
               <SauceStep
-                :selected-sauce-id="pizza.selectedSauce?.id"
+                :selected-sauce-id="currentPizza.sauceId"
                 @sauce-changed="handleSauceChange"
               />
 
-              <!-- Выбор ингредиентов с drag-and-drop -->
+
               <IngredientsStep
-                :selected-ingredients="pizza.selectedIngredients"
+                :selected-ingredients="currentPizza.ingredients"
                 @ingredients-changed="handleIngredientsChange"
                 @ingredient-dragged="handleIngredientDragged"
               />
@@ -44,14 +44,14 @@
           </div>
         </div>
 
-        <!-- Шаг 4: Отображение пиццы и оформление заказа -->
+
         <div class="content__pizza">
           <PizzaCanvas
-            :selected-dough="pizza.selectedDough"
-            :selected-size="pizza.selectedSize"
-            :selected-sauce="pizza.selectedSauce"
-            :selected-ingredients="pizza.selectedIngredients"
-            :all-ingredients="allIngredients"
+            :selected-dough="pizzaStore.getDoughById(currentPizza.doughId)"
+            :selected-size="pizzaStore.getSizeById(currentPizza.sizeId)"
+            :selected-sauce="pizzaStore.getSauceById(currentPizza.sauceId)"
+            :selected-ingredients="currentPizza.ingredients"
+            :all-ingredients="ingredients"
             @pizza-changed="handlePizzaChange"
             @order-pizza="handleOrder"
           />
@@ -59,10 +59,12 @@
       </div>
     </form>
 
-    <!-- Уведомление о drag-and-drop -->
-    <div v-if="isDragging" class="drag-notification">
-      <p>💫 Перетащите ингредиент на пиццу для добавления</p>
-    </div>
+
+    <Transition name="fade">
+      <div v-if="isDragging" class="drag-notification">
+        <p>Перетащите ингредиент на пиццу для добавления</p>
+      </div>
+    </Transition>
   </main>
 </template>
 
@@ -73,7 +75,9 @@ import SauceStep from "./SauceStep.vue";
 import IngredientsStep from "./IngredientsStep.vue";
 import PizzaCanvas from "./PizzaCanvas.vue";
 
-import ingredientsData from "@/mocks/ingredients.json";
+import { usePizzaStore } from "@/stores/pizza";
+import { storeToRefs } from "pinia";
+import { ref } from "vue";
 
 export default {
   name: "PizzaConstructor",
@@ -85,75 +89,57 @@ export default {
     PizzaCanvas,
   },
   emits: ["pizza-ordered"],
-  data() {
+  setup() {
+    const pizzaStore = usePizzaStore();
+    const { currentPizza, ingredients, loading, error } = storeToRefs(pizzaStore);
+    
+    pizzaStore.loadConstructorData();
+    
     return {
-      allIngredients: ingredientsData,
-      isDragging: false,
-      pizza: {
-        name: "",
-        selectedDough: null,
-        selectedSize: null,
-        selectedSauce: null,
-        selectedIngredients: {},
-      },
+      pizzaStore,
+      currentPizza,
+      ingredients,
+      loading,
+      error,
+      isDragging: ref(false)
     };
   },
   computed: {
     totalPrice() {
-      let price = 0;
-
-      if (this.pizza.selectedDough)
-        price += this.pizza.selectedDough.price || 0;
-      if (this.pizza.selectedSize) price += this.pizza.selectedSize.price || 0;
-      if (this.pizza.selectedSauce)
-        price += this.pizza.selectedSauce.price || 0;
-
-      // Цена ингредиентов
-      Object.entries(this.pizza.selectedIngredients).forEach(
-        ([ingredientId, count]) => {
-          const ingredient = this.allIngredients.find(
-            (ing) => ing.id == ingredientId,
-          );
-          if (ingredient && count > 0) {
-            price += (ingredient.price || 0) * count;
-          }
-        },
-      );
-
-      return price;
+      return this.currentPizza.price;
     },
 
     pizzaSummary() {
-      return {
-        ...this.pizza,
-        totalPrice: this.totalPrice,
-        ingredientsList: this.getIngredientsText(),
-      };
+      return this.pizzaStore.currentPizzaDescription;
     },
   },
   methods: {
     handleDoughChange(dough) {
-      this.pizza.selectedDough = dough;
-      this.logPizzaChange("Изменено тесто", dough);
+      this.pizzaStore.selectDough(dough.id);
     },
 
     handleSizeChange(size) {
-      this.pizza.selectedSize = size;
-      this.logPizzaChange("Изменен размер", size);
+      this.pizzaStore.selectSize(size.id);
     },
 
     handleSauceChange(sauce) {
-      this.pizza.selectedSauce = sauce;
-      this.logPizzaChange("Изменен соус", sauce);
+      this.pizzaStore.selectSauce(sauce.id);
     },
 
     handleIngredientsChange(ingredients) {
-      this.pizza.selectedIngredients = ingredients;
-      this.logPizzaChange("Изменены ингредиенты", ingredients);
+      this.pizzaStore.clearAllIngredients();
+      
+      Object.entries(ingredients).forEach(([ingredientId, quantity]) => {
+        if (quantity > 0) {
+          this.pizzaStore.addIngredient(parseInt(ingredientId), quantity);
+        }
+      });
     },
 
     handlePizzaChange(changes) {
-      Object.assign(this.pizza, changes);
+      if (changes.name) {
+        this.pizzaStore.setPizzaName(changes.name);
+      }
     },
 
     handleIngredientDragged(event) {
@@ -161,90 +147,42 @@ export default {
     },
 
     handleOrder(orderData = null) {
-      const order = orderData || this.pizzaSummary;
-
-      // Проверяем, что заказ можно оформить
-      if (!this.canOrder()) {
+      if (!this.pizzaStore.isPizzaReady) {
         this.showOrderError();
         return;
       }
 
-      // Эмитируем событие заказа
-      this.$emit("pizza-ordered", order);
+      const pizzaForCart = this.pizzaStore.getPizzaForCart();
 
-      // Показываем уведомление
-      this.showOrderSuccess(order);
+      this.$emit("pizza-ordered", pizzaForCart);
 
-      // Сбрасываем конструктор
-      this.resetConstructor();
-    },
+      this.showOrderSuccess(pizzaForCart);
 
-    canOrder() {
-      return (
-        this.pizza.name?.trim().length > 0 &&
-        this.pizza.selectedDough &&
-        this.pizza.selectedSize &&
-        this.pizza.selectedSauce
-      );
+      this.pizzaStore.resetPizza();
     },
 
     showOrderSuccess(order) {
-      alert(`🍕 Заказ оформлен!
+      alert(`Заказ оформлен!
       
 Пицца: ${order.name}
-Тесто: ${order.selectedDough.name}
-Размер: ${order.selectedSize.name}
-Соус: ${order.selectedSauce.name}
-Ингредиенты: ${order.ingredientsList}
+Тесто: ${order.dough}
+Размер: ${order.size}
+Соус: ${order.sauce}
+Ингредиенты: ${order.ingredientsText}
 
-Итого: ${order.totalPrice} ₽`);
+Итого: ${order.price} ₽`);
     },
 
     showOrderError() {
       alert(
-        "❌ Заполните все обязательные поля:\n- Название пиццы\n- Тесто\n- Размер\n- Соус",
+        "Заполните все обязательные поля:\n- Название пиццы\n- Тесто\n- Размер\n- Соус",
       );
-    },
-
-    resetConstructor() {
-      this.pizza = {
-        name: "",
-        selectedDough: null,
-        selectedSize: null,
-        selectedSauce: null,
-        selectedIngredients: {},
-      };
-    },
-
-    getIngredientsText() {
-      const ingredients = [];
-
-      Object.entries(this.pizza.selectedIngredients).forEach(
-        ([ingredientId, count]) => {
-          const ingredient = this.allIngredients.find(
-            (ing) => ing.id == ingredientId,
-          );
-          if (ingredient && count > 0) {
-            ingredients.push(`${ingredient.name} x${count}`);
-          }
-        },
-      );
-
-      return ingredients.length > 0
-        ? ingredients.join(", ")
-        : "без ингредиентов";
-    },
-
-    logPizzaChange(action, data) {
-      console.log(`🍕 ${action}:`, data);
-      console.log("Текущая пицца:", this.pizzaSummary);
-    },
+    }
   },
 };
 </script>
 
 <style lang="scss" scoped>
-// Design System Colors
 $white: #ffffff;
 $black: #000000;
 $green-500: #41b619;
@@ -291,7 +229,6 @@ $green-500: #41b619;
   margin-bottom: 15px;
 }
 
-// Title styles
 .title {
   box-sizing: border-box;
   width: 100%;
@@ -311,7 +248,6 @@ $green-500: #41b619;
   }
 }
 
-// Sheet styles
 .sheet {
   padding-top: 15px;
   border-radius: 8px;
@@ -346,7 +282,6 @@ $green-500: #41b619;
   padding-bottom: 20px;
 }
 
-// Drag notification
 .drag-notification {
   position: fixed;
   top: 20px;
@@ -380,7 +315,6 @@ $green-500: #41b619;
   }
 }
 
-// Responsive design
 @media (max-width: 920px) {
   .content__wrapper {
     width: 100%;

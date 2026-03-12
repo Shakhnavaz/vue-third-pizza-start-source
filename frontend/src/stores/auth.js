@@ -10,26 +10,30 @@ export const useAuthStore = defineStore('auth', {
   }),
 
   getters: {
-    
+
     currentUser: (state) => state.user,
 
-    
+
     isLoggedIn: (state) => state.isAuthenticated,
 
-    
+
     userName: (state) => state.user?.name || '',
 
-    
+
     userEmail: (state) => state.user?.email || ''
   },
 
   actions: {
-    
+
     async login(credentials) {
       this.loading = true
       this.error = null
 
       try {
+        const { useProfileStore } = await import('./profile')
+        const profileStore = useProfileStore()
+        profileStore.logout()
+        
         const response = await authService.login(credentials)
         const { token, ...userData } = response.data
 
@@ -47,20 +51,46 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
+
+    async signup(userData) {
+      this.loading = true
+      this.error = null
+
+      try {
+        const response = await authService.signup(userData)
+        
+        await this.login({
+          email: userData.email,
+          password: userData.password
+        })
+
+        return response.data
+      } catch (error) {
+        this.error = error.response?.data?.message || 'Ошибка регистрации'
+        throw error
+      } finally {
+        this.loading = false
+      }
+    },
+
     
     async logout() {
       try {
         await authService.logout()
       } catch (error) {
-        console.error('Ошибка при выходе:', error)
+
       } finally {
         tokenService.removeToken()
         this.user = null
         this.isAuthenticated = false
+        
+        const { useProfileStore } = await import('./profile')
+        const profileStore = useProfileStore()
+        profileStore.logout()
       }
     },
 
-    
+
     async checkAuth() {
       if (!tokenService.hasToken()) {
         this.isAuthenticated = false
@@ -81,7 +111,7 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
-    
+
     clearError() {
       this.error = null
     }

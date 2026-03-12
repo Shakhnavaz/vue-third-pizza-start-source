@@ -7,12 +7,12 @@
     </span>
 
     <AppCounter
-      v-model:value="currentCount"
+      :model-value="currentCount"
       :min="0"
       :max="10"
       variant="orange"
       class="ingredient-selector__counter"
-      @change="handleCountChange"
+      @update:modelValue="handleCountChange"
     />
   </li>
 </template>
@@ -27,8 +27,6 @@ export default {
   },
   props: {
     
-
-
     ingredient: {
       type: Object,
       required: true,
@@ -37,8 +35,6 @@ export default {
       },
     },
     
-
-
     count: {
       type: Number,
       default: 0,
@@ -57,7 +53,6 @@ export default {
   },
   methods: {
     getIngredientClass(ingredientName) {
-
       const classMap = {
         Грибы: "mushrooms",
         Чеддер: "cheddar",
@@ -79,6 +74,7 @@ export default {
     },
 
     handleCountChange(newCount) {
+      this.currentCount = newCount;
       this.$emit("update:count", newCount);
       this.$emit("change", {
         ingredient: this.ingredient,
@@ -90,9 +86,7 @@ export default {
 </script>
 
 <style lang="scss" scoped>
-
 $white: #ffffff;
-
 
 @mixin r-s14-h16 {
   font-size: 14px;
@@ -100,7 +94,6 @@ $white: #ffffff;
   font-style: normal;
   line-height: 16px;
 }
-
 
 @mixin p_center-v {
   position: absolute;

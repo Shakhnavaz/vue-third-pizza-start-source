@@ -1,8 +1,9 @@
 import { defineStore } from 'pinia'
+import { addressService, ordersService } from '@/services'
+import { useAuthStore } from './auth'
 
 export const useProfileStore = defineStore('profile', {
   state: () => ({
-
     user: {
       id: null,
       name: '',
@@ -11,24 +12,17 @@ export const useProfileStore = defineStore('profile', {
       avatar: null
     },
 
-
     addresses: [
-
     ],
-
 
     selectedAddressId: null,
 
-
     orderHistory: [
-
     ],
-
 
     isAuthenticated: false,
     isLoading: false,
     error: null,
-
 
     guestOrderData: {
       name: '',
@@ -39,7 +33,6 @@ export const useProfileStore = defineStore('profile', {
   }),
 
   getters: {
-
     fullUserInfo: (state) => {
       if (!state.isAuthenticated) return null
       return {
@@ -49,21 +42,17 @@ export const useProfileStore = defineStore('profile', {
       }
     },
 
-
     primaryAddress: (state) => {
       return state.addresses.find(addr => addr.isPrimary) || state.addresses[0] || null
     },
-
 
     selectedAddress: (state) => {
       return state.addresses.find(addr => addr.id === state.selectedAddressId) || null
     },
 
-
     getAddressById: (state) => (id) => {
       return state.addresses.find(addr => addr.id === id)
     },
-
 
     activeOrders: (state) => {
       return state.orderHistory.filter(order => 
@@ -71,19 +60,16 @@ export const useProfileStore = defineStore('profile', {
       )
     },
 
-
     completedOrders: (state) => {
       return state.orderHistory.filter(order => 
         ['delivered', 'cancelled'].includes(order.status)
       )
     },
 
-
     isGuestOrderDataValid: (state) => {
       return state.guestOrderData.name.trim() !== '' && 
              state.guestOrderData.phone.trim() !== ''
     },
-
 
     orderContactData: (state) => {
       if (state.isAuthenticated) {
@@ -111,7 +97,7 @@ export const useProfileStore = defineStore('profile', {
     formattedPhone: (state) => {
       const phone = state.isAuthenticated ? state.user.phone : state.guestOrderData.phone
       if (!phone) return ''
-      
+
       const cleanPhone = phone.replace(/\D/g, '')
       if (cleanPhone.length === 11 && cleanPhone.startsWith('7')) {
         return `+7 (${cleanPhone.slice(1, 4)}) ${cleanPhone.slice(4, 7)}-${cleanPhone.slice(7, 9)}-${cleanPhone.slice(9, 11)}`
@@ -128,7 +114,7 @@ export const useProfileStore = defineStore('profile', {
     defaultDeliveryAddress: (state) => {
       const address = state.addresses.find(addr => addr.isPrimary) || state.addresses[0]
       if (!address) return null
-      
+
       return {
         ...address,
         formatted: `${address.street}, ${address.building}${address.flat ? `, кв. ${address.flat}` : ''}`,
@@ -195,15 +181,11 @@ export const useProfileStore = defineStore('profile', {
   },
 
   actions: {
-
     async login(credentials) {
       this.isLoading = true
       this.error = null
 
       try {
-
-
-
 
         this.user = {
           id: 1,
@@ -215,7 +197,6 @@ export const useProfileStore = defineStore('profile', {
 
         this.isAuthenticated = true
 
-
         await Promise.all([
           this.loadAddresses(),
           this.loadOrderHistory()
@@ -223,13 +204,12 @@ export const useProfileStore = defineStore('profile', {
 
       } catch (error) {
         this.error = error.message
-        console.error('Ошибка авторизации:', error)
+
         throw error
       } finally {
         this.isLoading = false
       }
     },
-
 
     logout() {
       this.user = {
@@ -240,12 +220,11 @@ export const useProfileStore = defineStore('profile', {
         avatar: null
       }
       this.addresses = []
-      this.selectedAddress = null
+      this.selectedAddressId = null
       this.orderHistory = []
       this.isAuthenticated = false
       this.error = null
     },
-
 
     async updateProfile(userData) {
       this.isLoading = true
@@ -253,150 +232,139 @@ export const useProfileStore = defineStore('profile', {
 
       try {
 
-
-
         this.user = { ...this.user, ...userData }
 
       } catch (error) {
         this.error = error.message
-        console.error('Ошибка обновления профиля:', error)
+
         throw error
       } finally {
         this.isLoading = false
       }
     },
 
-
     async loadAddresses() {
-      if (!this.isAuthenticated) return
+      const authStore = useAuthStore()
+      if (!authStore.isAuthenticated) {
+        this.addresses = []
+        return
+      }
 
       try {
+        const response = await addressService.getAll()
+        this.addresses = response.data.map((address, index) => ({
+          ...address,
+          isPrimary: index === 0,
+          isNew: false,
+        }))
+
+        if (this.addresses.length > 0 && !this.selectedAddressId) {
+          this.selectedAddressId = this.addresses[0].id
+        }
 
 
 
 
-        this.addresses = [
-          {
-            id: 1,
-            street: 'ул. Примерная',
-            building: '123',
-            apartment: '45',
-            floor: '5',
-            comment: 'Код домофона: 1234',
-            isPrimary: true
-          }
-        ]
+
+
+
+
 
       } catch (error) {
-        console.error('Ошибка загрузки адресов:', error)
+        this.addresses = []
       }
     },
-
 
     async addAddress(addressData) {
       this.isLoading = true
       this.error = null
 
       try {
+        const response = await addressService.create(addressData)
+        await this.loadAddresses()
+        return response.data
 
 
 
-        const newAddress = {
-          id: Date.now(),
-          ...addressData,
-          isPrimary: this.addresses.length === 0
-        }
 
-        this.addresses.push(newAddress)
 
-        return newAddress
+
+
 
       } catch (error) {
-        this.error = error.message
-        console.error('Ошибка добавления адреса:', error)
+        this.error = error.response?.data?.error?.message || error.message
+
         throw error
       } finally {
         this.isLoading = false
       }
     },
-
 
     async updateAddress(addressId, addressData) {
       this.isLoading = true
       this.error = null
 
       try {
+        await addressService.update(addressId, addressData)
+        await this.loadAddresses()
 
 
 
-        const index = this.addresses.findIndex(addr => addr.id === addressId)
-        if (index !== -1) {
-          this.addresses[index] = { ...this.addresses[index], ...addressData }
-        }
 
       } catch (error) {
         this.error = error.message
-        console.error('Ошибка обновления адреса:', error)
+
         throw error
       } finally {
         this.isLoading = false
       }
     },
-
 
     async deleteAddress(addressId) {
       this.isLoading = true
       this.error = null
 
       try {
+        await addressService.delete(addressId)
 
+        if (this.selectedAddressId === addressId) {
+          this.selectedAddressId = null
 
-
-        const index = this.addresses.findIndex(addr => addr.id === addressId)
-        if (index !== -1) {
-          this.addresses.splice(index, 1)
         }
 
+        await this.loadAddresses()
 
-        if (this.selectedAddress === addressId) {
-          this.selectedAddress = null
-        }
+
 
       } catch (error) {
         this.error = error.message
-        console.error('Ошибка удаления адреса:', error)
+
         throw error
       } finally {
         this.isLoading = false
       }
     },
 
-
     selectAddress(addressId) {
       this.selectedAddressId = addressId
     },
 
-
     async loadOrderHistory() {
-      if (!this.isAuthenticated) return
+      const authStore = useAuthStore()
+      if (!authStore.isAuthenticated) return
 
       try {
-
-
-
-
-        this.orderHistory = []
+        const response = await ordersService.getAll()
+        this.orderHistory = response.data
 
       } catch (error) {
-        console.error('Ошибка загрузки истории заказов:', error)
+        this.orderHistory = []
       }
     },
-
 
     updateGuestOrderData(data) {
       this.guestOrderData = { ...this.guestOrderData, ...data }
     },
-
 
     resetGuestOrderData() {
       this.guestOrderData = {
@@ -407,11 +375,9 @@ export const useProfileStore = defineStore('profile', {
       }
     },
 
-
     addOrderToHistory(order) {
       this.orderHistory.unshift(order)
     },
-
 
     updateOrderStatus(orderId, status) {
       const order = this.orderHistory.find(o => o.id === orderId)

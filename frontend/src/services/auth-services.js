@@ -2,9 +2,14 @@ import httpClient from './http-client'
 
 
 class AuthService {
-  
+
   login(credentials) {
     return httpClient.post('/login', credentials)
+  }
+
+
+  signup(userData) {
+    return httpClient.post('/signup', userData)
   }
 
   
@@ -12,7 +17,7 @@ class AuthService {
     return httpClient.delete('/logout')
   }
 
-  
+
   whoAmI() {
     return httpClient.get('/whoAmI')
   }

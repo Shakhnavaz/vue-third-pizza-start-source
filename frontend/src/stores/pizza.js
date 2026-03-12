@@ -25,7 +25,11 @@ export const usePizzaStore = defineStore('pizza', {
     ],
 
     loading: false,
-    error: null
+    error: null,
+
+    dataLoaded: false,
+
+    loadingPromise: null
   }),
 
   getters: {
@@ -158,73 +162,53 @@ export const usePizzaStore = defineStore('pizza', {
 
   actions: {
     async loadConstructorData() {
+      if (this.loadingPromise) {
+        return this.loadingPromise
+      }
+
+      if (this.dataLoaded) {
+        return
+      }
+
       this.loading = true
       this.error = null
 
-      try {
-        const [sizesRes, doughsRes, saucesRes, ingredientsRes] = await Promise.all([
-          sizesService.getAll(),
-          doughService.getAll(),
-          saucesService.getAll(),
-          ingredientsService.getAll()
-        ])
+      this.loadingPromise = (async () => {
+        try {
+          const [sizesRes, doughsRes, saucesRes, ingredientsRes] = await Promise.all([
+            sizesService.getAll(),
+            doughService.getAll(),
+            saucesService.getAll(),
+            ingredientsService.getAll()
+          ])
 
-        this.sizes = sizesRes.data
-        this.doughs = doughsRes.data
-        this.sauces = saucesRes.data
-        this.ingredients = ingredientsRes.data
+          this.sizes = sizesRes.data
+          this.doughs = doughsRes.data
+          this.sauces = saucesRes.data
+          this.ingredients = ingredientsRes.data
+          this.dataLoaded = true
 
+        } catch (error) {
+          this.error = error.response?.data?.message || error.message
+          console.error('Ошибка загрузки данных конструктора:', error)
 
+          const doughData = await import('@/mocks/dough.json')
+          const sizesData = await import('@/mocks/sizes.json')
+          const saucesData = await import('@/mocks/sauces.json')
+          const ingredientsData = await import('@/mocks/ingredients.json')
 
+          this.doughs = doughData.default
+          this.sizes = sizesData.default
+          this.sauces = saucesData.default
+          this.ingredients = ingredientsData.default
+          this.dataLoaded = true
+        } finally {
+          this.loading = false
+          this.loadingPromise = null
+        }
+      })()
 
-
-      } catch (error) {
-        this.error = error.response?.data?.message || error.message
-        console.error('Ошибка загрузки данных конструктора:', error)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-      } finally {
-        this.loading = false
-      }
+      return this.loadingPromise
     },
 
     setPizzaName(name) {
@@ -263,22 +247,22 @@ export const usePizzaStore = defineStore('pizza', {
     },
 
     removeIngredient(ingredientId) {
-      const index = this.currentPizza.ingredients.findIndex(ing => ing.ingredientId === ingredientId)
-      if (index !== -1) {
-        this.currentPizza.ingredients.splice(index, 1)
-        this.calculatePrice()
-      }
+      const filtered = this.currentPizza.ingredients.filter(
+        ing => ing.ingredientId !== ingredientId
+      )
+      this.currentPizza.ingredients.splice(0, this.currentPizza.ingredients.length, ...filtered)
+      this.calculatePrice()
     },
 
     updateIngredientQuantity(ingredientId, quantity) {
-      if (quantity <= 0) {
+      if (quantity <= 0 || quantity === null || quantity === undefined) {
         this.removeIngredient(ingredientId)
         return
       }
 
-      const ingredient = this.currentPizza.ingredients.find(ing => ing.ingredientId === ingredientId)
-      if (ingredient) {
-        ingredient.quantity = quantity
+      const index = this.currentPizza.ingredients.findIndex(ing => ing.ingredientId === ingredientId)
+      if (index !== -1) {
+        this.currentPizza.ingredients[index].quantity = quantity
         this.calculatePrice()
       }
     },
@@ -306,16 +290,24 @@ export const usePizzaStore = defineStore('pizza', {
     },
 
     setIngredientQuantity(ingredientId, quantity) {
-      if (quantity <= 0) {
+      const parsedQuantity = parseInt(quantity)
+      
+      if (parsedQuantity <= 0 || isNaN(parsedQuantity) || quantity === null || quantity === undefined) {
         this.removeIngredient(ingredientId)
         return
       }
 
-      const ingredient = this.currentPizza.ingredients.find(ing => ing.ingredientId === ingredientId)
-      if (ingredient) {
-        ingredient.quantity = quantity
+      const index = this.currentPizza.ingredients.findIndex(ing => ing.ingredientId === ingredientId)
+      if (index !== -1) {
+        this.currentPizza.ingredients[index] = {
+          ...this.currentPizza.ingredients[index],
+          quantity: parsedQuantity
+        }
       } else {
-        this.addIngredient(ingredientId, quantity)
+        this.currentPizza.ingredients.push({
+          ingredientId: ingredientId,
+          quantity: parsedQuantity
+        })
       }
       this.calculatePrice()
     },
@@ -352,6 +344,12 @@ export const usePizzaStore = defineStore('pizza', {
     },
 
     calculatePrice() {
+      for (let i = this.currentPizza.ingredients.length - 1; i >= 0; i--) {
+        if (this.currentPizza.ingredients[i].quantity <= 0) {
+          this.currentPizza.ingredients.splice(i, 1)
+        }
+      }
+      
       let basePrice = 0
 
       if (this.currentPizza.doughId) {
@@ -370,7 +368,7 @@ export const usePizzaStore = defineStore('pizza', {
 
       this.currentPizza.ingredients.forEach(ing => {
         const ingredient = this.getIngredientById(ing.ingredientId)
-        if (ingredient) {
+        if (ingredient && ing.quantity > 0) {
           basePrice += ingredient.price * ing.quantity
         }
       })
@@ -404,16 +402,20 @@ export const usePizzaStore = defineStore('pizza', {
       const description = this.currentPizzaDescription
 
       return {
+        id: Date.now(),
+        type: 'pizza',
         name: description.name,
         sizeId: this.currentPizza.sizeId,
         doughId: this.currentPizza.doughId,
         sauceId: this.currentPizza.sauceId,
         ingredients: this.currentPizza.ingredients,
+        ingredientsText: description.ingredients,
         size: description.size,
         dough: description.dough,
         sauce: description.sauce,
-        ingredientsText: description.ingredients,
+
         price: this.currentPizza.price,
+        quantity: 1,
       }
     },
 
