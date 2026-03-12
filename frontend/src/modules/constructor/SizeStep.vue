@@ -19,7 +19,8 @@
 
 <script>
 import { SizeSelector } from "@/common/components";
-import sizesData from "@/mocks/sizes.json";
+import { usePizzaStore } from "@/stores/pizza";
+import { storeToRefs } from "pinia";
 
 export default {
   name: "SizeStep",
@@ -27,22 +28,22 @@ export default {
     SizeSelector,
   },
   props: {
-    /**
-     * Выбранный ID размера
-     */
+    
     selectedSizeId: {
       type: [Number, String],
       default: null,
     },
   },
   emits: ["size-changed"],
-  data() {
+  setup() {
+    const pizzaStore = usePizzaStore();
+    const { sizes } = storeToRefs(pizzaStore);
+    
     return {
-      sizes: sizesData,
+      sizes,
     };
   },
   mounted() {
-    // Автоматически выбираем средний размер по умолчанию
     if (!this.selectedSizeId && this.sizes.length > 1) {
       this.handleSizeChange(this.sizes[1]);
     }
@@ -62,7 +63,6 @@ export default {
   margin-bottom: 15px;
 }
 
-// Sheet styles
 .sheet {
   padding-top: 15px;
   border-radius: 8px;

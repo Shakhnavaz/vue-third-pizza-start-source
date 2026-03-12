@@ -6,7 +6,7 @@
           <h1 class="title title--big">Корзина</h1>
         </div>
 
-        <!-- Empty cart state -->
+
         <div v-if="cartItems.length === 0" class="sheet cart__empty">
           <p>В корзине нет ни одного товара</p>
           <router-link :to="{ name: 'home' }" class="button">
@@ -14,7 +14,7 @@
           </router-link>
         </div>
 
-        <!-- Cart items -->
+
         <ul v-else class="cart-list sheet">
           <li 
             v-for="item in cartItems" 
@@ -60,7 +60,7 @@
           </li>
         </ul>
 
-        <!-- Additional items -->
+
         <div v-if="additionalItems.length > 0" class="cart__additional">
           <ul class="additional-list">
             <li 
@@ -96,7 +96,7 @@
           </ul>
         </div>
 
-        <!-- Order form -->
+
         <div v-if="cartItems.length > 0" class="cart__form">
           <div class="cart-form">
             <label class="cart-form__select">
@@ -146,20 +146,20 @@
         </div>
       </div>
     </main>
-    
-    <!-- Footer with order total -->
+
+
     <section v-if="cartItems.length > 0" class="footer">
       <div class="footer__more">
         <router-link :to="{ name: 'home' }" class="button button--border button--arrow">
           Хочу еще одну
         </router-link>
       </div>
-      
+
       <p class="footer__text">
         Перейти к конструктору<br />
         чтоб собрать ещё одну пиццу
       </p>
-      
+
       <div class="footer__price">
         <b>Итого: {{ totalPrice }} ₽</b>
       </div>
@@ -172,9 +172,10 @@
 </template>
 
 <script>
-import { reactive, ref, computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { AppCounter } from '@/common/components'
+import { useCartStore, useProfileStore, useDataStore } from '@/stores'
 
 export default {
   name: 'CartView',
@@ -184,107 +185,175 @@ export default {
   setup() {
     const router = useRouter()
     
-    // Mock data
-    const cartItems = ref([
-      {
-        id: 1,
-        name: 'Капричоза',
-        size: '30 см',
-        dough: 'тонкое тесто',
-        sauce: 'томатный',
-        ingredients: 'грибы, лук, ветчина, пармезан, ананас',
-        price: 782,
-        quantity: 1
-      },
-      {
-        id: 2,
-        name: 'Любимая пицца',
-        size: '30 см',
-        dough: 'тонкое тесто',
-        sauce: 'томатный',
-        ingredients: 'грибы, лук, ветчина, пармезан, ананас, бекон, блю чиз',
-        price: 782,
-        quantity: 2
-      }
-    ])
+    const cartStore = useCartStore()
+    const profileStore = useProfileStore() 
+    const dataStore = useDataStore()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     
-    const additionalItems = ref([
-      {
-        id: 1,
-        name: 'Coca-Cola 0,5 литра',
-        image: '@/assets/img/cola.svg',
-        price: 56,
-        quantity: 2
-      },
-      {
-        id: 2,
-        name: 'Острый соус',
-        image: '@/assets/img/sauce.svg',
-        price: 30,
-        quantity: 2
-      }
-    ])
+    onMounted(async () => {
+      await cartStore.loadMisc()
+      cartStore.loadFromStorage()
+    })
+
+
+
+
+
+
+
+
+
+
+
+
     
-    const orderForm = reactive({
-      deliveryType: 'pickup',
-      phone: '',
-      street: '',
-      house: '',
-      apartment: ''
+    const cartItems = computed(() => cartStore.getPizzaItems)
+    const additionalItems = computed(() => {
+      return cartStore.misc.map(miscItem => {
+        const inCart = cartStore.findMiscInCart(miscItem.id)
+        return {
+          ...miscItem,
+          quantity: inCart ? inCart.quantity : 0
+        }
+      }).filter(item => item.quantity > 0)
     })
     
-    // Computed
-    const totalPrice = computed(() => {
-      const itemsTotal = cartItems.value.reduce((sum, item) => {
-        return sum + (item.price * item.quantity)
-      }, 0)
-      
-      const additionalTotal = additionalItems.value.reduce((sum, item) => {
-        return sum + (item.price * item.quantity)
-      }, 0)
-      
-      return itemsTotal + additionalTotal
+    const totalPrice = computed(() => cartStore.totalAmount)
+    
+    const orderForm = computed({
+      get: () => {
+        if (profileStore.isAuthenticated) {
+          return {
+            deliveryType: profileStore.selectedAddressId ? 'address' : 'pickup',
+            phone: profileStore.user.phone,
+            street: '',
+            house: '',
+            apartment: ''
+          }
+        } else {
+          return {
+            deliveryType: 'pickup',
+            phone: profileStore.guestOrderData.phone,
+            street: profileStore.guestOrderData.street || '',
+            house: profileStore.guestOrderData.house || '',
+            apartment: profileStore.guestOrderData.apartment || ''
+          }
+        }
+      },
+      set: (value) => {
+        if (!profileStore.isAuthenticated) {
+          profileStore.updateGuestOrderData({
+            phone: value.phone,
+            street: value.street,
+            house: value.house,
+            apartment: value.apartment
+          })
+        }
+      }
     })
     
-    // Methods
     const updateItemQuantity = (itemId, quantity) => {
-      const item = cartItems.value.find(item => item.id === itemId)
-      if (item) {
-        item.quantity = quantity
-      }
+      cartStore.updateItemQuantity(itemId, quantity)
+      cartStore.saveToStorage()
+
+
     }
     
     const updateAdditionalItem = (itemId, quantity) => {
-      const item = additionalItems.value.find(item => item.id === itemId)
-      if (item) {
-        item.quantity = quantity
+      if (quantity > 0) {
+        if (!cartStore.hasMiscItem(itemId)) {
+          cartStore.addMiscItem(itemId, quantity)
+        } else {
+          const cartItem = cartStore.findMiscInCart(itemId)
+          if (cartItem) {
+            cartStore.updateMiscQuantity(cartItem.id, quantity)
+          }
+        }
+      } else {
+        cartStore.removeAllMiscById(itemId)
       }
+      cartStore.saveToStorage()
     }
     
     const editItem = (itemId) => {
-      // Redirect to constructor with item data for editing
       router.push({ name: 'home', query: { edit: itemId } })
     }
     
-    const handleSubmit = () => {
-      console.log('Order submitted:', {
-        items: cartItems.value,
-        additional: additionalItems.value.filter(item => item.quantity > 0),
-        form: orderForm,
-        total: totalPrice.value
-      })
-      
-      alert(`Заказ оформлен на сумму ${totalPrice.value} ₽!`)
-      
-      // Clear cart and redirect
-      cartItems.value = []
-      additionalItems.value.forEach(item => item.quantity = 0)
-      router.push({ name: 'home' })
+    const handleSubmit = async () => {
+      try {
+        if (cartStore.isEmpty) {
+          alert('Корзина пуста!')
+          return
+        }
+        
+        if (!profileStore.canPlaceOrder) {
+          alert('Заполните контактные данные!')
+          return
+        }
+        
+        const orderData = {
+          ...cartStore.exportForOrder(),
+          contactData: profileStore.orderContactData,
+          deliveryAddress: profileStore.selectedAddress || orderForm.value,
+          timestamp: new Date().toISOString()
+        }
+        
+        console.log('Order submitted:', orderData)
+        
+        alert(`Заказ оформлен на сумму ${totalPrice.value} ₽!
+        
+📋 Детали заказа:
+━━━━━━━━━━━━━━━━━━━━━━━━━
+🍕 Пицц: ${cartStore.pizzaItemsCount} шт.
+🥤 Дополнительно: ${cartStore.miscItemsCount} шт.
+📞 Телефон: ${orderData.contactData.phone}
+💰 Итого: ${orderData.totalAmount} ₽
+━━━━━━━━━━━━━━━━━━━━━━━━━`)
+        
+        if (profileStore.isAuthenticated) {
+          profileStore.addOrderToHistory({
+            id: Date.now().toString(),
+            ...orderData,
+            status: 'pending'
+          })
+        }
+        
+        cartStore.clearCart()
+        cartStore.saveToStorage()
+        
+        if (!profileStore.isAuthenticated) {
+          profileStore.resetGuestOrderData()
+        }
+        
+        router.push({ name: 'home' })
+        
+      } catch (error) {
+        console.error('Ошибка при оформлении заказа:', error)
+        alert('Ошибка при оформлении заказа. Попробуйте еще раз.')
+      }
     }
     
     return {
       cartItems,
-      additionalItems,
+      additionalItems, 
       orderForm,
       totalPrice,
       updateItemQuantity,
@@ -297,7 +366,6 @@ export default {
 </script>
 
 <style lang="scss" scoped>
-// Design System
 @use "@/assets/scss/ds-system/ds-colors";
 @use "@/assets/scss/ds-system/ds-typography";
 
@@ -327,7 +395,9 @@ export default {
   padding: 60px 40px;
   
   p {
-    @include ds-typography.r-s18-h21;
+    font-size: 18px;
+    font-weight: 400;
+    line-height: 21px;
     margin-bottom: 30px;
     color: ds-colors.$purple-800;
   }
@@ -359,7 +429,9 @@ export default {
   }
   
   &__price {
-    @include ds-typography.b-s18-h21;
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 21px;
     flex-shrink: 0;
     min-width: 80px;
     text-align: right;
@@ -370,7 +442,9 @@ export default {
   }
   
   &__edit {
-    @include ds-typography.r-s14-h16;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 16px;
     background: none;
     border: none;
     color: ds-colors.$green-500;
@@ -404,7 +478,9 @@ export default {
   }
   
   &__description {
-    @include ds-typography.r-s16-h19;
+    font-size: 16px;
+    font-weight: 400;
+    line-height: 19px;
     display: flex;
     align-items: center;
     gap: 12px;
@@ -418,7 +494,9 @@ export default {
   }
   
   &__price {
-    @include ds-typography.b-s16-h19;
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 19px;
     margin: 0;
   }
 }
@@ -439,7 +517,9 @@ export default {
   }
   
   &__label {
-    @include ds-typography.r-s16-h19;
+    font-size: 16px;
+    font-weight: 400;
+    line-height: 19px;
     color: ds-colors.$black;
   }
   
@@ -473,14 +553,18 @@ export default {
   }
   
   &__text {
-    @include ds-typography.r-s14-h16;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 16px;
     color: ds-colors.$white;
     margin: 0;
     text-align: center;
   }
   
   &__price {
-    @include ds-typography.b-s24-h28;
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 28px;
     color: ds-colors.$white;
     margin: 0;
   }
@@ -490,7 +574,6 @@ export default {
   }
 }
 
-// Responsive
 @media (max-width: 768px) {
   .cart-list__item {
     flex-direction: column;

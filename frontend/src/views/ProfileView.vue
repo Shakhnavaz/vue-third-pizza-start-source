@@ -4,7 +4,7 @@
       <h1 class="title title--big">Мои данные</h1>
     </div>
 
-    <!-- User info -->
+
     <div class="user">
       <picture>
         <source 
@@ -19,18 +19,18 @@
           height="72"
         />
       </picture>
-      
+
       <div class="user__name">
         <span>{{ user.name }}</span>
       </div>
-      
+
       <p class="user__phone">
         Контактный телефон: 
         <span>{{ user.phone }}</span>
       </p>
     </div>
 
-    <!-- Existing addresses -->
+
     <div 
       v-for="address in addresses" 
       :key="address.id"
@@ -49,13 +49,13 @@
             </button>
           </div>
         </div>
-        
+
         <p>{{ formatAddress(address) }}</p>
-        
+
         <small v-if="address.comment">{{ address.comment }}</small>
       </div>
 
-      <!-- Edit form -->
+
       <form 
         v-else
         @submit.prevent="saveAddress(address.id)"
@@ -77,7 +77,7 @@
               />
             </label>
           </div>
-          
+
           <div class="address-form__input address-form__input--size--normal">
             <label class="input">
               <span>Улица*</span>
@@ -89,7 +89,7 @@
               />
             </label>
           </div>
-          
+
           <div class="address-form__input address-form__input--size--small">
             <label class="input">
               <span>Дом*</span>
@@ -101,7 +101,7 @@
               />
             </label>
           </div>
-          
+
           <div class="address-form__input address-form__input--size--small">
             <label class="input">
               <span>Квартира</span>
@@ -112,7 +112,7 @@
               />
             </label>
           </div>
-          
+
           <div class="address-form__input">
             <label class="input">
               <span>Комментарий</span>
@@ -133,7 +133,7 @@
           >
             Удалить
           </button>
-          
+
           <button type="submit" class="button">
             Сохранить
           </button>
@@ -141,7 +141,7 @@
       </form>
     </div>
 
-    <!-- Add new address -->
+
     <div class="layout__button">
       <button 
         type="button" 
@@ -155,99 +155,130 @@
 </template>
 
 <script>
-import { reactive, ref } from 'vue'
+import { computed, onMounted } from 'vue'
+import { useProfileStore } from '@/stores'
 
 export default {
   name: 'ProfileView',
   setup() {
-    // User data
-    const user = reactive({
-      name: 'Василий Ложкин',
-      phone: '+7 999-999-99-99',
-      avatar: '@/assets/img/users/user5'
+    const profileStore = useProfileStore()
+
+
+
+
+    
+    onMounted(async () => {
+      if (!profileStore.isAuthenticated) {
+        await profileStore.login({
+          name: 'Василий Ложкин',
+          phone: '+7 999-999-99-99',
+          email: 'vasily@example.com'
+        })
+
+
+
+      }
     })
     
-    // Addresses data
-    const addresses = ref([
-      {
-        id: 1,
-        name: 'Адрес №1. Тест',
-        street: 'Невский пр.',
-        house: '22',
-        apartment: '46',
-        comment: 'Позвоните, пожалуйста, от проходной',
-        isEditing: false,
-        editData: {}
-      }
-    ])
+    const user = computed(() => ({
+      name: profileStore.fullUserInfo?.name || 'Пользователь',
+      phone: profileStore.formattedPhone,
+      avatar: profileStore.user.avatar || '@/assets/img/users/user5'
+    }))
     
-    // Methods
+    const addresses = computed(() => {
+      return profileStore.formattedAddresses.map(addr => ({
+        ...addr,
+        isEditing: addr.isEditing || false,
+        editData: addr.editData || {}
+      }))
+    })
+    
     const formatAddress = (address) => {
-      let result = `${address.street}, д. ${address.house}`
-      if (address.apartment) {
-        result += `, кв. ${address.apartment}`
-      }
-      return result
+      return address.formatted || `${address.street}, д. ${address.building}${address.apartment ? `, кв. ${address.apartment}` : ''}`
+
+
+
+
     }
     
-    const startEditing = (addressId) => {
-      const address = addresses.value.find(addr => addr.id === addressId)
+    const startEditing = async (addressId) => {
+      const address = profileStore.getAddressById(addressId)
       if (address) {
-        address.editData = {
-          name: address.name,
-          street: address.street,
-          house: address.house,
-          apartment: address.apartment,
-          comment: address.comment
-        }
         address.isEditing = true
+        address.editData = {
+          name: address.name || '',
+          street: address.street || '',
+          house: address.building || address.house || '',
+          apartment: address.apartment || address.flat || '',
+          comment: address.comment || ''
+        }
+
       }
     }
     
-    const saveAddress = (addressId) => {
-      const address = addresses.value.find(addr => addr.id === addressId)
-      if (address && address.editData) {
-        // Update main data
-        Object.assign(address, address.editData)
-        
-        // Exit edit mode
-        address.isEditing = false
-        address.editData = {}
-        
-        console.log('Адрес сохранен:', address)
+    const saveAddress = async (addressId) => {
+      try {
+        const address = profileStore.getAddressById(addressId)
+        if (address && address.editData) {
+          await profileStore.updateAddress(addressId, {
+            name: address.editData.name,
+            street: address.editData.street,
+            building: address.editData.house,
+            apartment: address.editData.apartment,
+            comment: address.editData.comment
+          })
+          
+          address.isEditing = false
+          address.editData = {}
+          
+          console.log('Адрес сохранен:', address)
+        }
+      } catch (error) {
+        console.error('Ошибка сохранения адреса:', error)
+        alert('Ошибка при сохранении адреса')
       }
     }
     
-    const deleteAddress = (addressId) => {
+    const deleteAddress = async (addressId) => {
       if (confirm('Вы уверены, что хотите удалить адрес?')) {
-        const index = addresses.value.findIndex(addr => addr.id === addressId)
-        if (index !== -1) {
-          addresses.value.splice(index, 1)
+        try {
+          await profileStore.deleteAddress(addressId)
+
           console.log(`Адрес #${addressId} удален`)
+        } catch (error) {
+          console.error('Ошибка удаления адреса:', error)
+          alert('Ошибка при удалении адреса')
         }
       }
     }
     
-    const addNewAddress = () => {
-      const newId = Math.max(...addresses.value.map(addr => addr.id)) + 1
-      const newAddress = {
-        id: newId,
-        name: '',
-        street: '',
-        house: '',
-        apartment: '',
-        comment: '',
-        isEditing: true,
-        editData: {
+    const addNewAddress = async () => {
+      try {
+        const newAddress = await profileStore.addAddress({
           name: '',
           street: '',
-          house: '',
+          building: '',
           apartment: '',
           comment: ''
+        })
+        
+        if (newAddress) {
+          newAddress.isEditing = true
+          newAddress.editData = {
+            name: '',
+            street: '',
+            house: '',
+            apartment: '',
+            comment: ''
+          }
         }
+      } catch (error) {
+        console.error('Ошибка добавления адреса:', error)
+        alert('Ошибка при добавлении нового адреса')
       }
-      
-      addresses.value.push(newAddress)
+
+
     }
     
     return {
@@ -264,7 +295,6 @@ export default {
 </script>
 
 <style lang="scss" scoped>
-// Design System
 @use "@/assets/scss/ds-system/ds-colors";
 @use "@/assets/scss/ds-system/ds-typography";
 
@@ -291,13 +321,17 @@ export default {
   flex: 1;
   
   span {
-    @include ds-typography.b-s20-h23;
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 23px;
     color: ds-colors.$black;
   }
 }
 
 .user__phone {
-  @include ds-typography.r-s14-h16;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 16px;
   margin: 0;
   color: ds-colors.$purple-800;
   
@@ -325,7 +359,9 @@ export default {
     margin-bottom: 16px;
     
     b {
-      @include ds-typography.b-s16-h19;
+      font-size: 16px;
+      font-weight: 700;
+      line-height: 19px;
       color: ds-colors.$black;
     }
   }
@@ -364,11 +400,9 @@ export default {
   
   &__input {
     &--size--normal {
-      // Uses default grid behavior
     }
     
     &--size--small {
-      // Uses default grid behavior  
     }
   }
   
@@ -383,13 +417,17 @@ export default {
   }
   
   p {
-    @include ds-typography.r-s16-h19;
+    font-size: 16px;
+    font-weight: 400;
+    line-height: 19px;
     margin: 0 0 8px 0;
     color: ds-colors.$black;
   }
   
   small {
-    @include ds-typography.r-s14-h16;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 16px;
     color: ds-colors.$purple-800;
     font-style: italic;
   }
@@ -404,7 +442,6 @@ export default {
   }
 }
 
-// Responsive
 @media (max-width: 768px) {
   .user {
     flex-direction: column;

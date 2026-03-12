@@ -18,7 +18,8 @@
 
 <script>
 import { DoughSelector } from "@/common/components";
-import doughData from "@/mocks/dough.json";
+import { usePizzaStore } from "@/stores/pizza";
+import { storeToRefs } from "pinia";
 
 export default {
   name: "DoughStep",
@@ -27,21 +28,21 @@ export default {
   },
   props: {
     
-
-
     selectedDoughId: {
       type: [Number, String],
       default: null,
     },
   },
   emits: ["dough-changed"],
-  data() {
+  setup() {
+    const pizzaStore = usePizzaStore();
+    const { doughs } = storeToRefs(pizzaStore);
+    
     return {
-      doughTypes: doughData,
+      doughTypes: doughs,
     };
   },
   mounted() {
-
     if (!this.selectedDoughId && this.doughTypes.length > 0) {
       this.handleDoughChange(this.doughTypes[0]);
     }
@@ -61,7 +62,6 @@ export default {
   margin-right: auto;
   margin-bottom: 15px;
 }
-
 
 .sheet {
   padding-top: 15px;

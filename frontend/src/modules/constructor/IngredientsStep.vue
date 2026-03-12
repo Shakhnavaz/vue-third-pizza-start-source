@@ -38,7 +38,9 @@
 
 <script>
 import { AppDrag, AppDrop, IngredientSelector } from "@/common/components";
-import ingredientsData from "@/mocks/ingredients.json";
+import { usePizzaStore } from "@/stores/pizza";
+import { storeToRefs } from "pinia";
+import { ref } from "vue";
 
 export default {
   name: "IngredientsStep",
@@ -48,16 +50,21 @@ export default {
     IngredientSelector,
   },
   props: {
+    
     selectedIngredients: {
       type: Object,
       default: () => ({}),
     },
   },
   emits: ["ingredients-changed", "ingredient-dragged"],
-  data() {
+  setup() {
+    const pizzaStore = usePizzaStore();
+    const { ingredients } = storeToRefs(pizzaStore);
+    const isDragActive = ref(false);
+    
     return {
-      availableIngredients: ingredientsData,
-      isDragActive: false,
+      availableIngredients: ingredients,
+      isDragActive,
     };
   },
   methods: {

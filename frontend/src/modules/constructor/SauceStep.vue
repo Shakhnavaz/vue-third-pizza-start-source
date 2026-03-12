@@ -19,7 +19,8 @@
 
 <script>
 import { AppRadio } from "@/common/components";
-import saucesData from "@/mocks/sauces.json";
+import { usePizzaStore } from "@/stores/pizza";
+import { storeToRefs } from "pinia";
 
 export default {
   name: "SauceStep",
@@ -27,22 +28,22 @@ export default {
     AppRadio,
   },
   props: {
-    /**
-     * Выбранный ID соуса
-     */
+    
     selectedSauceId: {
       type: [Number, String],
       default: null,
     },
   },
   emits: ["sauce-changed"],
-  data() {
+  setup() {
+    const pizzaStore = usePizzaStore();
+    const { sauces } = storeToRefs(pizzaStore);
+    
     return {
-      sauces: saucesData,
+      sauces,
     };
   },
   mounted() {
-    // Автоматически выбираем первый соус по умолчанию
     if (!this.selectedSauceId && this.sauces.length > 0) {
       this.handleSauceChange(this.sauces[0].id);
     }

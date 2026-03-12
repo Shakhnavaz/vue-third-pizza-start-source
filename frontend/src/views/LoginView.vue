@@ -3,11 +3,11 @@
     <router-link to="/" class="close close--white">
       <span class="visually-hidden">Закрыть форму авторизации</span>
     </router-link>
-    
+
     <div class="sign-form__title">
       <h1 class="title title--small">Авторизуйтесь на сайте</h1>
     </div>
-    
+
     <form @submit.prevent="handleSubmit">
       <div class="sign-form__input">
         <label class="input">
@@ -34,7 +34,7 @@
           />
         </label>
       </div>
-      
+
       <button type="submit" class="button" :disabled="isLoading">
         {{ isLoading ? 'Вход...' : 'Авторизоваться' }}
       </button>
@@ -43,40 +43,47 @@
 </template>
 
 <script>
-import { reactive, ref } from 'vue'
+import { reactive, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { useProfileStore } from '@/stores'
 
 export default {
   name: 'LoginView',
   setup() {
     const router = useRouter()
-    const isLoading = ref(false)
+    
+    const profileStore = useProfileStore()
     
     const form = reactive({
       email: '',
       password: ''
     })
     
+    const isLoading = computed(() => profileStore.isLoading)
+    
     const handleSubmit = async () => {
-      isLoading.value = true
-      
+
+
       try {
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 1000))
+        if (!form.email || !form.password) {
+          alert('Заполните все поля')
+          return
+        }
         
-        // Mock login logic
-        console.log('Логин:', form)
+        await profileStore.login({
+          email: form.email,
+          password: form.password,
+        })
         
-        // Redirect to home page after login
         router.push({ name: 'home' })
         
-        // Show success message
         alert(`Добро пожаловать! Вы вошли как ${form.email}`)
+        
       } catch (error) {
         console.error('Login error:', error)
-        alert('Ошибка входа. Попробуйте еще раз.')
-      } finally {
-        isLoading.value = false
+        alert('Ошибка входа: ' + error.message)
+
+
       }
     }
     
@@ -90,7 +97,6 @@ export default {
 </script>
 
 <style lang="scss" scoped>
-// Design System
 @use "@/assets/scss/ds-system/ds-colors";
 @use "@/assets/scss/ds-system/ds-typography";
 @use "@/assets/scss/ds-system/ds-shadows";

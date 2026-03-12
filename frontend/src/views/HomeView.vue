@@ -4,7 +4,7 @@
       <div class="content__wrapper">
         <h1 class="title title--big">Конструктор пиццы</h1>
 
-        <!-- Шаг 1: Выбор теста -->
+
         <div class="content__dough">
           <DoughStep
             :selected-dough-id="pizzaState.selectedDough?.id"
@@ -12,7 +12,7 @@
           />
         </div>
 
-        <!-- Шаг 2: Выбор размера -->
+
         <div class="content__diameter">
           <SizeStep
             :selected-size-id="pizzaState.selectedSize?.id"
@@ -20,7 +20,7 @@
           />
         </div>
 
-        <!-- Шаг 3: Выбор соуса и ингредиентов -->
+
         <div class="content__ingredients">
           <div class="sheet">
             <h2 class="title title--small sheet__title">
@@ -28,13 +28,13 @@
             </h2>
 
             <div class="sheet__content ingredients">
-              <!-- Выбор соуса -->
+
               <SauceStep
                 :selected-sauce-id="pizzaState.selectedSauce?.id"
                 @sauce-changed="handleSauceChange"
               />
 
-              <!-- Выбор ингредиентов с drag-and-drop -->
+
               <IngredientsStep
                 :selected-ingredients="pizzaState.selectedIngredients"
                 @ingredients-changed="handleIngredientsChange"
@@ -44,7 +44,7 @@
           </div>
         </div>
 
-        <!-- Шаг 4: Отображение пиццы и оформление заказа -->
+
         <div class="content__pizza">
           <PizzaCanvas
             :selected-dough="pizzaState.selectedDough"
@@ -59,12 +59,12 @@
       </div>
     </form>
 
-    <!-- Уведомление о drag-and-drop -->
+
     <div v-if="isDraggingIngredient" class="drag-notification">
       <p>💫 Перетащите ингредиент на пиццу для добавления</p>
     </div>
 
-    <!-- Debug панель (только в development) -->
+
     <div v-if="showDebugInfo" class="debug-panel">
       <h3>🔍 Debug Info</h3>
       <p><strong>Тесто:</strong> {{ debugInfo.doughInfo }}</p>
@@ -78,7 +78,7 @@
 </template>
 
 <script>
-import { reactive, computed, ref, watch } from "vue";
+import { computed, ref, watch, onMounted } from "vue";
 import {
   DoughStep,
   SizeStep,
@@ -86,7 +86,7 @@ import {
   IngredientsStep,
   PizzaCanvas,
 } from "@/modules/constructor";
-import ingredientsData from "@/mocks/ingredients.json";
+import { usePizzaStore, useCartStore, useDataStore } from "@/stores";
 
 export default {
   name: "HomeView",
@@ -98,133 +98,94 @@ export default {
     PizzaCanvas,
   },
   setup() {
-    // Реактивное состояние пиццы
-    const pizzaState = reactive({
-      name: "",
-      selectedDough: null,
-      selectedSize: null,
-      selectedSauce: null,
-      selectedIngredients: {},
-    });
+    const pizzaStore = usePizzaStore();
+    const cartStore = useCartStore();
+    const dataStore = useDataStore();
 
-    // Дополнительное реактивное состояние
+
+
+
+
     const isDraggingIngredient = ref(false);
-    const allIngredients = ref(ingredientsData);
+
     const showDebugInfo = ref(import.meta.env.DEV);
 
-    // Computed свойства для расчетов
-    const totalPrice = computed(() => {
-      let price = 0;
+    onMounted(async () => {
+      await pizzaStore.loadConstructorData();
 
-      // Базовая цена компонентов
-      if (pizzaState.selectedDough)
-        price += pizzaState.selectedDough.price || 0;
-      if (pizzaState.selectedSize) price += pizzaState.selectedSize.price || 0;
-      if (pizzaState.selectedSauce)
-        price += pizzaState.selectedSauce.price || 0;
-
-      // Цена ингредиентов
-      Object.entries(pizzaState.selectedIngredients).forEach(
-        ([ingredientId, count]) => {
-          const ingredient = allIngredients.value.find(
-            (ing) => ing.id == ingredientId,
-          );
-          if (ingredient && count > 0) {
-            price += (ingredient.price || 0) * count;
-          }
-        },
-      );
-
-      return price;
     });
 
-    const canOrder = computed(() => {
-      return (
-        pizzaState.name?.trim().length > 0 &&
-        pizzaState.selectedDough &&
-        pizzaState.selectedSize &&
-        pizzaState.selectedSauce
-      );
-    });
+    const totalPrice = computed(() => pizzaStore.currentPizza.price);
+    const canOrder = computed(() => pizzaStore.isPizzaReady);
+    const allIngredients = computed(() => pizzaStore.ingredients);
 
     const ingredientsList = computed(() => {
-      const ingredients = [];
-
-      Object.entries(pizzaState.selectedIngredients).forEach(
-        ([ingredientId, count]) => {
-          const ingredient = allIngredients.value.find(
-            (ing) => ing.id == ingredientId,
-          );
-          if (ingredient && count > 0) {
-            ingredients.push(`${ingredient.name} x${count}`);
-          }
-        },
-      );
-
-      return ingredients.length > 0
-        ? ingredients.join(", ")
-        : "без ингредиентов";
+      return pizzaStore.selectedIngredientsDetails
+        .map(ing => `${ing.name} x${ing.quantity}`)
+        .join(", ") || "без ингредиентов";
     });
 
     const orderSummary = computed(() => {
       return {
-        name: pizzaState.name,
-        selectedDough: pizzaState.selectedDough,
-        selectedSize: pizzaState.selectedSize,
-        selectedSauce: pizzaState.selectedSauce,
-        selectedIngredients: { ...pizzaState.selectedIngredients },
+        name: pizzaStore.currentPizza.name,
+        selectedDough: pizzaStore.getDoughById(pizzaStore.currentPizza.doughId),
+        selectedSize: pizzaStore.getSizeById(pizzaStore.currentPizza.sizeId),
+        selectedSauce: pizzaStore.getSauceById(pizzaStore.currentPizza.sauceId),
+        selectedIngredients: pizzaStore.currentPizza.ingredients,
         totalPrice: totalPrice.value,
         ingredientsList: ingredientsList.value,
         canOrder: canOrder.value,
       };
     });
 
-    // Debug info computed
     const debugInfo = computed(() => {
+      const dough = pizzaStore.getDoughById(pizzaStore.currentPizza.doughId);
+      const size = pizzaStore.getSizeById(pizzaStore.currentPizza.sizeId);
+      const sauce = pizzaStore.getSauceById(pizzaStore.currentPizza.sauceId);
+      
       return {
-        doughInfo: pizzaState.selectedDough
-          ? `${pizzaState.selectedDough.name} (${pizzaState.selectedDough.price}₽)`
-          : "не выбрано",
-        sizeInfo: pizzaState.selectedSize
-          ? `${pizzaState.selectedSize.name} (${pizzaState.selectedSize.price}₽)`
-          : "не выбрано",
-        sauceInfo: pizzaState.selectedSauce
-          ? `${pizzaState.selectedSauce.name} (${pizzaState.selectedSauce.price}₽)`
-          : "не выбрано",
-        ingredientsInfo:
-          Object.keys(pizzaState.selectedIngredients).length > 0
-            ? ingredientsList.value
-            : "не выбраны",
+        doughInfo: dough ? `${dough.name} (${dough.price}₽)` : "не выбрано",
+        sizeInfo: size ? `${size.name} (${size.multiplier}x)` : "не выбрано",
+        sauceInfo: sauce ? `${sauce.name} (${sauce.price}₽)` : "не выбрано",
+        ingredientsInfo: pizzaStore.selectedIngredientsDetails.length > 0 
+          ? ingredientsList.value
+          : "не выбраны",
+
       };
     });
 
-    // Методы обработки изменений компонентов
     const handleDoughChange = (dough) => {
-      pizzaState.selectedDough = dough;
+      pizzaStore.selectDough(dough.id);
       console.log("🥖 Выбрано тесто:", dough);
     };
 
     const handleSizeChange = (size) => {
-      pizzaState.selectedSize = size;
+      pizzaStore.selectSize(size.id);
       console.log("📏 Выбран размер:", size);
     };
 
     const handleSauceChange = (sauce) => {
-      pizzaState.selectedSauce = sauce;
+      pizzaStore.selectSauce(sauce.id);
       console.log("🥫 Выбран соус:", sauce);
     };
 
     const handleIngredientsChange = (ingredients) => {
-      pizzaState.selectedIngredients = ingredients;
+      Object.entries(ingredients).forEach(([ingredientId, quantity]) => {
+        if (quantity > 0) {
+          pizzaStore.setIngredientQuantity(parseInt(ingredientId), quantity);
+        } else {
+          pizzaStore.removeIngredient(parseInt(ingredientId));
+        }
+      });
       console.log("🧀 Изменены ингредиенты:", ingredients);
     };
 
     const handlePizzaNameChange = (changes) => {
       if (changes.pizzaName !== undefined) {
-        pizzaState.name = changes.pizzaName;
+        pizzaStore.setPizzaName(changes.pizzaName);
       }
       if (changes.selectedIngredients) {
-        pizzaState.selectedIngredients = changes.selectedIngredients;
+        handleIngredientsChange(changes.selectedIngredients);
       }
     };
 
@@ -253,47 +214,44 @@ export default {
     const processOrder = (order) => {
       console.log("🍕 Обработка заказа:", order);
 
-      // Показываем уведомление об успешном заказе
-      alert(`🍕 Заказ "${order.name}" оформлен!
-      
-📋 Детали заказа:
+      try {
+        const pizzaForCart = pizzaStore.getPizzaForCart();
+        
+        cartStore.addItem(pizzaForCart);
+
+        alert(`🍕 Пицца "${pizzaForCart.name}" добавлена в корзину!
+        
+📋 Детали:
 ━━━━━━━━━━━━━━━━━━━━
-🥖 Тесто: ${order.selectedDough?.name || "не выбрано"}
-📏 Размер: ${order.selectedSize?.name || "не выбрано"}
-🥫 Соус: ${order.selectedSauce?.name || "не выбрано"}
-🧀 Ингредиенты: ${order.ingredientsList}
-💰 Итого: ${order.totalPrice} ₽
+🥖 Тесто: ${pizzaForCart.dough}
+📏 Размер: ${pizzaForCart.size}
+🥫 Соус: ${pizzaForCart.sauce}
+🧀 Ингредиенты: ${pizzaForCart.ingredientsText}
+💰 Цена: ${pizzaForCart.price} ₽
 ━━━━━━━━━━━━━━━━━━━━`);
 
-      // Сброс формы после заказа
-      resetPizzaState();
+        pizzaStore.resetPizza();
+      } catch (error) {
+        console.error("Ошибка при добавлении в корзину:", error);
+        alert("❌ Ошибка при добавлении в корзину: " + error.message);
+      }
     };
 
     const showValidationError = () => {
-      const errors = [];
-
-      if (!pizzaState.name?.trim()) errors.push("Название пиццы");
-      if (!pizzaState.selectedDough) errors.push("Тесто");
-      if (!pizzaState.selectedSize) errors.push("Размер");
-      if (!pizzaState.selectedSauce) errors.push("Соус");
-
+      const validation = pizzaStore.validatePizza();
+      
       alert(`❌ Заполните обязательные поля:
-${errors.map((field) => `• ${field}`).join("\n")}`);
+${validation.errors.map((field) => `• ${field}`).join("\n")}`);
     };
 
     const resetPizzaState = () => {
-      pizzaState.name = "";
-      pizzaState.selectedDough = null;
-      pizzaState.selectedSize = null;
-      pizzaState.selectedSauce = null;
-      pizzaState.selectedIngredients = {};
+      pizzaStore.resetPizza();
 
       console.log("🔄 Состояние пиццы сброшено");
     };
 
-    // Наблюдение за изменениями состояния (для отладки)
     watch(
-      () => pizzaState,
+      () => pizzaStore.currentPizza,
       (newState) => {
         console.log("📊 Состояние пиццы обновлено:", {
           name: newState.name,
@@ -304,21 +262,29 @@ ${errors.map((field) => `• ${field}`).join("\n")}`);
       { deep: true },
     );
 
+    const pizzaState = computed(() => ({
+      name: pizzaStore.currentPizza.name,
+      selectedDough: pizzaStore.getDoughById(pizzaStore.currentPizza.doughId),
+      selectedSize: pizzaStore.getSizeById(pizzaStore.currentPizza.sizeId),
+      selectedSauce: pizzaStore.getSauceById(pizzaStore.currentPizza.sauceId),
+      selectedIngredients: pizzaStore.currentPizza.ingredients.reduce((acc, ing) => {
+        acc[ing.ingredientId] = ing.quantity;
+        return acc;
+      }, {}),
+    }));
+
     return {
-      // Реактивное состояние
       pizzaState,
       isDraggingIngredient,
       allIngredients,
       showDebugInfo,
 
-      // Computed свойства
       totalPrice,
       canOrder,
       ingredientsList,
       orderSummary,
       debugInfo,
 
-      // Методы
       handleDoughChange,
       handleSizeChange,
       handleSauceChange,
@@ -335,7 +301,6 @@ ${errors.map((field) => `• ${field}`).join("\n")}`);
 </script>
 
 <style lang="scss" scoped>
-// Design System Colors
 $white: #ffffff;
 $black: #000000;
 $green-500: #41b619;
@@ -382,7 +347,6 @@ $green-500: #41b619;
   margin-bottom: 15px;
 }
 
-// Removed duplicate styles - now using common-components.scss
 
 .ingredients {
   flex-direction: column;
@@ -390,7 +354,6 @@ $green-500: #41b619;
   padding-bottom: 20px;
 }
 
-// Drag notification
 .drag-notification {
   position: fixed;
   top: 20px;
@@ -412,7 +375,6 @@ $green-500: #41b619;
   }
 }
 
-// Debug panel
 .debug-panel {
   position: fixed;
   bottom: 20px;
@@ -448,7 +410,6 @@ $green-500: #41b619;
   }
 }
 
-// Responsive design
 @media (max-width: 920px) {
   .content__wrapper {
     width: 100%;
