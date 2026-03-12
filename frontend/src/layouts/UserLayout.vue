@@ -19,7 +19,7 @@
         >
           История заказов
         </router-link>
-        
+
         <router-link 
           class="layout__link"
           :class="{ 'layout__link--active': $route.name === 'profile' }"
@@ -48,14 +48,14 @@ export default {
 </script>
 
 <style lang="scss" scoped>
-// Design System
+
 @use "@/assets/scss/ds-system/ds-colors";
 @use "@/assets/scss/ds-system/ds-typography";
 @use "@/assets/scss/ds-system/ds-shadows";
 
 .layout {
   display: flex;
-  min-height: calc(100vh - 60px); // Высота header
+
   background-color: ds-colors.$white;
 }
 
@@ -81,7 +81,9 @@ export default {
 }
 
 .layout__link {
-  @include ds-typography.r-s16-h19;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 19px;
   
   display: block;
   padding: 16px 20px;
@@ -107,10 +109,10 @@ export default {
 }
 
 .sidebar {
-  // Additional sidebar styles if needed
+
 }
 
-// Responsive
+
 @media (max-width: 768px) {
   .layout {
     flex-direction: column;

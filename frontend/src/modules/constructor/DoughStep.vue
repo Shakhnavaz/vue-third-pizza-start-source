@@ -26,9 +26,9 @@ export default {
     DoughSelector,
   },
   props: {
-    /**
-     * Выбранный ID теста
-     */
+    
+
+
     selectedDoughId: {
       type: [Number, String],
       default: null,
@@ -41,7 +41,7 @@ export default {
     };
   },
   mounted() {
-    // Автоматически выбираем первое тесто по умолчанию
+
     if (!this.selectedDoughId && this.doughTypes.length > 0) {
       this.handleDoughChange(this.doughTypes[0]);
     }
@@ -62,7 +62,7 @@ export default {
   margin-bottom: 15px;
 }
 
-// Sheet styles
+
 .sheet {
   padding-top: 15px;
   border-radius: 8px;
