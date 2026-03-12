@@ -1,12 +1,17 @@
 <template>
-  <RouterView />
+  <RouterView v-slot="{ Component, route }">
+    <Transition name="slide" mode="out-in">
+      <component :is="Component" :key="route.path" />
+    </Transition>
+  </RouterView>
 </template>
 
 <style lang="scss">
-@import "@/assets/scss/app.scss";
 @use "@/assets/scss/ds-system/ds-colors";
 @use "@/assets/scss/ds-system/ds-shadows";
 @use "@/assets/scss/ds-system/ds-typography";
+@import "@/assets/scss/app.scss";
+@import "@/assets/styles/transitions.scss";
 
 body {
   justify-content: center;
@@ -25,7 +30,9 @@ body {
 
     text-align: center;
 
-    @include ds-typography.b-s36-h42;
+    font-size: 36px;
+    font-weight: 700;
+    line-height: 42px;
   }
 
   p {

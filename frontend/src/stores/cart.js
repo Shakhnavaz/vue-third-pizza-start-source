@@ -1,423 +1,476 @@
 import { defineStore } from 'pinia'
-import { miscService } from '@/services'
+import { sizesService, doughService, saucesService, ingredientsService } from '@/services'
 
-export const useCartStore = defineStore('cart', {
+export const usePizzaStore = defineStore('pizza', {
   state: () => ({
-    items: [
+    currentPizza: {
+      name: '',
+      sizeId: null,
+      doughId: null,
+      sauceId: null,
+      ingredients: [], // { ingredientId: number, quantity: number }
+      price: 0
+    },
+
+    sizes: [
+    ],
+    doughs: [
+    ],
+    sauces: [
+    ],
+    ingredients: [
     ],
 
-    misc: [
+    pizzas: [
     ],
 
-    totalPrice: 0
+    loading: false,
+    error: null,
+    
+    dataLoaded: false,
+    
+    loadingPromise: null
   }),
 
   getters: {
-    cartItemsCount: (state) => {
-      return state.items.reduce((total, item) => total + item.quantity, 0)
+    getSizeById: (state) => (id) => {
+      return state.sizes.find(size => size.id === id)
     },
 
-    totalAmount: (state) => {
-      return state.items.reduce((total, item) => total + (item.price * item.quantity), 0)
+    getDoughById: (state) => (id) => {
+      return state.doughs.find(dough => dough.id === id)
     },
 
-    isEmpty: (state) => state.items.length === 0,
-
-    getPizzaItems: (state) => state.items.filter(item => item.type === 'pizza'),
-    getMiscItems: (state) => state.items.filter(item => item.type === 'misc'),
-
-    cartItems: (state) => state.items,
-
-    pizzaTotalAmount: (state) => {
-      return state.items
-        .filter(item => item.type === 'pizza')
-        .reduce((total, item) => total + (item.price * item.quantity), 0)
+    getSauceById: (state) => (id) => {
+      return state.sauces.find(sauce => sauce.id === id)
     },
 
-    miscTotalAmount: (state) => {
-      return state.items
-        .filter(item => item.type === 'misc')
-        .reduce((total, item) => total + (item.price * item.quantity), 0)
+    getIngredientById: (state) => (id) => {
+      return state.ingredients.find(ingredient => ingredient.id === id)
     },
 
-    pizzaItemsCount: (state) => {
-      return state.items
-        .filter(item => item.type === 'pizza')
-        .reduce((total, item) => total + item.quantity, 0)
+    isIngredientSelected: (state) => (ingredientId) => {
+      return state.currentPizza.ingredients.some(ing => ing.ingredientId === ingredientId)
     },
 
-    miscItemsCount: (state) => {
-      return state.items
-        .filter(item => item.type === 'misc')
-        .reduce((total, item) => total + item.quantity, 0)
+    getIngredientQuantity: (state) => (ingredientId) => {
+      const ingredient = state.currentPizza.ingredients.find(ing => ing.ingredientId === ingredientId)
+      return ingredient ? ingredient.quantity : 0
     },
 
-    mostExpensiveItem: (state) => {
-      if (state.items.length === 0) return null
-      return state.items.reduce((max, item) => 
-        item.price > max.price ? item : max, state.items[0]
-      )
+    isPizzaReady: (state) => {
+      return state.currentPizza.name && 
+             state.currentPizza.sizeId && 
+             state.currentPizza.doughId && 
+             state.currentPizza.sauceId
     },
 
-    cheapestItem: (state) => {
-      if (state.items.length === 0) return null
-      return state.items.reduce((min, item) => 
-        item.price < min.price ? item : min, state.items[0]
-      )
-    },
-
-    averageItemPrice: (state) => {
-      if (state.items.length === 0) return 0
-      const total = state.items.reduce((sum, item) => sum + item.price, 0)
-      return Math.round(total / state.items.length)
-    },
-
-    itemsSortedByPrice: (state) => {
-      return [...state.items].sort((a, b) => b.price - a.price)
-    },
-
-    hasItemById: (state) => (id) => {
-      return state.items.some(item => item.id === id)
-    },
-
-    getItemById: (state) => (id) => {
-      return state.items.find(item => item.id === id)
-    },
-
-    uniqueItemsCount: (state) => state.items.length,
-
-    exceedsAmount: (state) => (amount) => {
-      return state.items.reduce((total, item) => total + (item.price * item.quantity), 0) > amount
-    },
-
-    formattedTotal: (state) => {
-      const total = state.items.reduce((sum, item) => sum + (item.price * item.quantity), 0)
-      return `${total} ₽`
-    },
-
-    itemsGroupedByType: (state) => {
-      const pizza = state.items.filter(item => item.type === 'pizza')
-      const misc = state.items.filter(item => item.type === 'misc')
+    currentPizzaDescription: (state) => {
+      const size = state.sizes.find(s => s.id === state.currentPizza.sizeId)
+      const dough = state.doughs.find(d => d.id === state.currentPizza.doughId)
+      const sauce = state.sauces.find(s => s.id === state.currentPizza.sauceId)
 
       return {
-        pizza: {
-          items: pizza,
-          count: pizza.reduce((total, item) => total + item.quantity, 0),
-          totalAmount: pizza.reduce((total, item) => total + (item.price * item.quantity), 0)
-        },
-        misc: {
-          items: misc,
-          count: misc.reduce((total, item) => total + item.quantity, 0),
-          totalAmount: misc.reduce((total, item) => total + (item.price * item.quantity), 0)
-        }
-      }
-    }
-  },
-
-  actions: {
-    async loadMisc() {
-      try {
-        const response = await miscService.getAll()
-        this.misc = response.data
-
-
-      } catch (error) {
-        console.error('Ошибка загрузки дополнительных товаров:', error)
-        this.misc = []
-
-
-
-
+        name: state.currentPizza.name,
+        size: size?.name || '',
+        dough: dough?.name || '',
+        sauce: sauce?.name || '',
+        ingredients: state.currentPizza.ingredients.map(ing => {
+          const ingredient = state.ingredients.find(i => i.id === ing.ingredientId)
+          return `${ingredient?.name} (${ing.quantity})`
+        }).join(', '),
+        price: state.currentPizza.price
       }
     },
 
-    addItem(item) {
-      const existingItem = this.items.find(cartItem => cartItem.id === item.id)
+    basePizzaPrice: (state) => {
+      let basePrice = 0
 
-      if (existingItem) {
-        this.updateItemQuantity(item.id, existingItem.quantity + 1)
-      } else {
-        this.items.push({
-          ...item,
-          quantity: 1
-        })
+      if (state.currentPizza.doughId) {
+        const dough = state.doughs.find(d => d.id === state.currentPizza.doughId)
+        if (dough) basePrice += dough.price
       }
 
-      this.calculateTotal()
-    },
-
-    removeItem(itemId) {
-      const index = this.items.findIndex(item => item.id === itemId)
-      if (index !== -1) {
-        this.items.splice(index, 1)
-        this.calculateTotal()
+      if (state.currentPizza.sauceId) {
+        const sauce = state.sauces.find(s => s.id === state.currentPizza.sauceId)
+        if (sauce) basePrice += sauce.price
       }
-    },
 
-    updateItemQuantity(itemId, quantity) {
-      const item = this.items.find(item => item.id === itemId)
-      if (item) {
-        if (quantity <= 0) {
-          this.removeItem(itemId)
-        } else {
-          item.quantity = quantity
-          this.calculateTotal()
-        }
-      }
-    },
-
-    incrementItem(itemId) {
-      const item = this.items.find(item => item.id === itemId)
-      if (item) {
-        item.quantity += 1
-        this.calculateTotal()
-      }
-    },
-
-    decrementItem(itemId) {
-      const item = this.items.find(item => item.id === itemId)
-      if (item) {
-        if (item.quantity > 1) {
-          item.quantity -= 1
-          this.calculateTotal()
-        } else {
-          this.removeItem(itemId)
-        }
-      }
-    },
-
-    updatePizzaQuantity(pizzaId, quantity) {
-      const pizza = this.items.find(item => item.id === pizzaId && item.type === 'pizza')
-      if (pizza) {
-        if (quantity <= 0) {
-          this.removeItem(pizzaId)
-        } else {
-          pizza.quantity = quantity
-          this.calculateTotal()
-        }
-      }
-    },
-
-    incrementPizza(pizzaId) {
-      const pizza = this.items.find(item => item.id === pizzaId && item.type === 'pizza')
-      if (pizza) {
-        pizza.quantity += 1
-        this.calculateTotal()
-      }
-    },
-
-    decrementPizza(pizzaId) {
-      const pizza = this.items.find(item => item.id === pizzaId && item.type === 'pizza')
-      if (pizza) {
-        if (pizza.quantity > 1) {
-          pizza.quantity -= 1
-          this.calculateTotal()
-        } else {
-          this.removeItem(pizzaId)
-        }
-      }
-    },
-
-    clearPizzas() {
-      this.items = this.items.filter(item => item.type !== 'pizza')
-      this.calculateTotal()
-    },
-
-    duplicatePizza(pizzaId) {
-      const pizza = this.items.find(item => item.id === pizzaId && item.type === 'pizza')
-      if (pizza) {
-        const duplicatedPizza = {
-          ...pizza,
-          id: Date.now() + Math.random(),
-          quantity: 1
-        }
-        this.items.push(duplicatedPizza)
-        this.calculateTotal()
-        return duplicatedPizza.id
-      }
-      return null
-    },
-
-    setPizzaQuantityByName(pizzaName, quantity) {
-      const pizzas = this.items.filter(item => item.type === 'pizza' && item.name === pizzaName)
-      pizzas.forEach(pizza => {
-        if (quantity <= 0) {
-          this.removeItem(pizza.id)
-        } else {
-          pizza.quantity = quantity
-        }
+      state.currentPizza.ingredients.forEach(ing => {
+        const ingredient = state.ingredients.find(i => i.id === ing.ingredientId)
+        if (ingredient) basePrice += ingredient.price * ing.quantity
       })
-      this.calculateTotal()
+
+      return basePrice
     },
 
-    clearCart() {
-      this.items = []
-      this.totalPrice = 0
+    sizeMultiplier: (state) => {
+      if (!state.currentPizza.sizeId) return 1
+      const size = state.sizes.find(s => s.id === state.currentPizza.sizeId)
+      return size?.multiplier || 1
     },
 
-    addMiscItem(miscId, quantity = 1) {
-      const miscItem = this.misc.find(item => item.id === miscId)
-      if (!miscItem) {
-        console.error('Дополнительный товар не найден:', miscId)
-        return
-      }
-
-      const cartItem = {
-        id: `misc-${miscId}-${Date.now()}`,
-        type: 'misc',
-        miscId: miscId,
-        name: miscItem.name,
-        image: miscItem.image,
-        price: miscItem.price,
-        quantity: quantity
-      }
-
-      this.addItem(cartItem)
+    totalIngredientsCount: (state) => {
+      return state.currentPizza.ingredients.reduce((total, ing) => total + ing.quantity, 0)
     },
 
-    clearMiscItems() {
-      this.items = this.items.filter(item => item.type !== 'misc')
-      this.calculateTotal()
-    },
-
-    updateMiscQuantity(itemId, quantity) {
-      const miscItem = this.items.find(item => item.id === itemId && item.type === 'misc')
-      if (miscItem) {
-        if (quantity <= 0) {
-          this.removeItem(itemId)
-        } else {
-          miscItem.quantity = quantity
-          this.calculateTotal()
-        }
-      }
-    },
-
-    incrementMiscItem(itemId) {
-      const miscItem = this.items.find(item => item.id === itemId && item.type === 'misc')
-      if (miscItem) {
-        miscItem.quantity += 1
-        this.calculateTotal()
-      }
-    },
-
-    decrementMiscItem(itemId) {
-      const miscItem = this.items.find(item => item.id === itemId && item.type === 'misc')
-      if (miscItem) {
-        if (miscItem.quantity > 1) {
-          miscItem.quantity -= 1
-          this.calculateTotal()
-        } else {
-          this.removeItem(itemId)
-        }
-      }
-    },
-
-    addMiscBundle(miscIds) {
-      miscIds.forEach(({ miscId, quantity = 1 }) => {
-        this.addMiscItem(miscId, quantity)
-      })
-    },
-
-    findMiscInCart(miscId) {
-      return this.items.find(item => item.type === 'misc' && item.miscId === miscId)
-    },
-
-    hasMiscItem(miscId) {
-      return this.items.some(item => item.type === 'misc' && item.miscId === miscId)
-    },
-
-    getMiscItemTotalQuantity(miscId) {
-      return this.items
-        .filter(item => item.type === 'misc' && item.miscId === miscId)
-        .reduce((total, item) => total + item.quantity, 0)
-    },
-
-    removeAllMiscById(miscId) {
-      this.items = this.items.filter(item => !(item.type === 'misc' && item.miscId === miscId))
-      this.calculateTotal()
-    },
-
-    calculateTotal() {
-      this.totalPrice = this.items.reduce((total, item) => {
-        return total + (item.price * item.quantity)
+    ingredientsPrice: (state) => {
+      return state.currentPizza.ingredients.reduce((total, ing) => {
+        const ingredient = state.ingredients.find(i => i.id === ing.ingredientId)
+        return total + (ingredient ? ingredient.price * ing.quantity : 0)
       }, 0)
     },
 
-    getItemQuantity(itemId) {
-      const item = this.items.find(item => item.id === itemId)
-      return item ? item.quantity : 0
+    hasMinimalComponents: (state) => {
+      return !!(state.currentPizza.sizeId && state.currentPizza.doughId && state.currentPizza.sauceId)
     },
 
-    hasItem(itemId) {
-      return this.items.some(item => item.id === itemId)
+    pizzaCompletionPercent: (state) => {
+      let completedSteps = 0
+      const totalSteps = 4 // name, size, dough, sauce
+
+      if (state.currentPizza.name) completedSteps++
+      if (state.currentPizza.sizeId) completedSteps++  
+      if (state.currentPizza.doughId) completedSteps++
+      if (state.currentPizza.sauceId) completedSteps++
+
+      return Math.round((completedSteps / totalSteps) * 100)
     },
 
-    applyDiscountToItem(itemId, discountPercent) {
-      const item = this.items.find(item => item.id === itemId)
-      if (item) {
-        const originalPrice = item.originalPrice || item.price
-        item.originalPrice = originalPrice
-        item.price = Math.round(originalPrice * (1 - discountPercent / 100))
-        this.calculateTotal()
-      }
-    },
-
-    applyGlobalDiscount(discountPercent) {
-      this.items.forEach(item => {
-        if (!item.originalPrice) {
-          item.originalPrice = item.price
+    selectedIngredientsDetails: (state) => {
+      return state.currentPizza.ingredients.map(ing => {
+        const ingredient = state.ingredients.find(i => i.id === ing.ingredientId)
+        return {
+          id: ing.ingredientId,
+          name: ingredient?.name || 'Неизвестный ингредиент',
+          image: ingredient?.image || '',
+          price: ingredient?.price || 0,
+          quantity: ing.quantity,
+          totalPrice: (ingredient?.price || 0) * ing.quantity
         }
-        item.price = Math.round(item.originalPrice * (1 - discountPercent / 100))
       })
-      this.calculateTotal()
     },
 
-    saveToStorage() {
-      try {
-        const cartData = {
-          items: this.items,
-          timestamp: Date.now()
+    mostExpensiveIngredients: (state) => {
+      return [...state.ingredients]
+        .sort((a, b) => b.price - a.price)
+        .slice(0, 3)
+    },
+
+    hasMenuPizzas: (state) => state.pizzas.length > 0
+  },
+
+  actions: {
+    async loadConstructorData() {
+      if (this.loadingPromise) {
+        return this.loadingPromise
+      }
+      
+      if (this.dataLoaded) {
+        return
+      }
+      
+      this.loading = true
+      this.error = null
+
+      this.loadingPromise = (async () => {
+        try {
+          const [sizesRes, doughsRes, saucesRes, ingredientsRes] = await Promise.all([
+            sizesService.getAll(),
+            doughService.getAll(),
+            saucesService.getAll(),
+            ingredientsService.getAll()
+          ])
+
+          this.sizes = sizesRes.data
+          this.doughs = doughsRes.data
+          this.sauces = saucesRes.data
+          this.ingredients = ingredientsRes.data
+          this.dataLoaded = true
+          
+        } catch (error) {
+          this.error = error.response?.data?.message || error.message
+          console.error('Ошибка загрузки данных конструктора:', error)
+          
+          const doughData = await import('@/mocks/dough.json')
+          const sizesData = await import('@/mocks/sizes.json')
+          const saucesData = await import('@/mocks/sauces.json')
+          const ingredientsData = await import('@/mocks/ingredients.json')
+          
+          this.doughs = doughData.default
+          this.sizes = sizesData.default
+          this.sauces = saucesData.default
+          this.ingredients = ingredientsData.default
+          this.dataLoaded = true
+        } finally {
+          this.loading = false
+          this.loadingPromise = null
         }
-        localStorage.setItem('pizza-cart', JSON.stringify(cartData))
-      } catch (error) {
-        console.error('Ошибка сохранения корзины:', error)
+      })()
+      
+      return this.loadingPromise
+    },
+
+    setPizzaName(name) {
+      this.currentPizza.name = name
+      this.calculatePrice()
+    },
+
+    selectSize(sizeId) {
+      this.currentPizza.sizeId = sizeId
+      this.calculatePrice()
+    },
+
+    selectDough(doughId) {
+      this.currentPizza.doughId = doughId
+      this.calculatePrice()
+    },
+
+    selectSauce(sauceId) {
+      this.currentPizza.sauceId = sauceId
+      this.calculatePrice()
+    },
+
+    addIngredient(ingredientId, quantity = 1) {
+      const existingIngredient = this.currentPizza.ingredients.find(ing => ing.ingredientId === ingredientId)
+
+      if (existingIngredient) {
+        existingIngredient.quantity += quantity
+      } else {
+        this.currentPizza.ingredients.push({
+          ingredientId: ingredientId,
+          quantity: quantity
+        })
+      }
+
+      this.calculatePrice()
+    },
+
+    removeIngredient(ingredientId) {
+      const index = this.currentPizza.ingredients.findIndex(ing => ing.ingredientId === ingredientId)
+      if (index !== -1) {
+        this.currentPizza.ingredients.splice(index, 1)
+        this.calculatePrice()
       }
     },
 
-    loadFromStorage() {
-      try {
-        const cartData = localStorage.getItem('pizza-cart')
-        if (cartData) {
-          const parsed = JSON.parse(cartData)
-          if (Date.now() - parsed.timestamp < 24 * 60 * 60 * 1000) {
-            this.items = parsed.items || []
-            this.calculateTotal()
-          }
-        }
-      } catch (error) {
-        console.error('Ошибка загрузки корзины:', error)
+    updateIngredientQuantity(ingredientId, quantity) {
+      if (quantity <= 0) {
+        this.removeIngredient(ingredientId)
+        return
+      }
+
+      const ingredient = this.currentPizza.ingredients.find(ing => ing.ingredientId === ingredientId)
+      if (ingredient) {
+        ingredient.quantity = quantity
+        this.calculatePrice()
       }
     },
 
-    exportForOrder() {
+    incrementIngredient(ingredientId) {
+      const ingredient = this.currentPizza.ingredients.find(ing => ing.ingredientId === ingredientId)
+      if (ingredient) {
+        ingredient.quantity += 1
+      } else {
+        this.addIngredient(ingredientId, 1)
+      }
+      this.calculatePrice()
+    },
+
+    decrementIngredient(ingredientId) {
+      const ingredient = this.currentPizza.ingredients.find(ing => ing.ingredientId === ingredientId)
+      if (ingredient) {
+        if (ingredient.quantity > 1) {
+          ingredient.quantity -= 1
+          this.calculatePrice()
+        } else {
+          this.removeIngredient(ingredientId)
+        }
+      }
+    },
+
+    setIngredientQuantity(ingredientId, quantity) {
+      if (quantity <= 0) {
+        this.removeIngredient(ingredientId)
+        return
+      }
+
+      const ingredient = this.currentPizza.ingredients.find(ing => ing.ingredientId === ingredientId)
+      if (ingredient) {
+        ingredient.quantity = quantity
+      } else {
+        this.addIngredient(ingredientId, quantity)
+      }
+      this.calculatePrice()
+    },
+
+    clearAllIngredients() {
+      this.currentPizza.ingredients = []
+      this.calculatePrice()
+    },
+
+    maxIngredient(ingredientId, maxQuantity = 5) {
+      this.setIngredientQuantity(ingredientId, maxQuantity)
+    },
+
+    toggleIngredient(ingredientId, defaultQuantity = 1) {
+      const ingredient = this.currentPizza.ingredients.find(ing => ing.ingredientId === ingredientId)
+      if (ingredient) {
+        this.removeIngredient(ingredientId)
+      } else {
+        this.addIngredient(ingredientId, defaultQuantity)
+      }
+    },
+
+    addMultipleIngredients(ingredientsList) {
+      ingredientsList.forEach(({ ingredientId, quantity = 1 }) => {
+        this.addIngredient(ingredientId, quantity)
+      })
+    },
+
+    applyRecipe(ingredients) {
+      this.currentPizza.ingredients = []
+      ingredients.forEach(({ ingredientId, quantity }) => {
+        this.addIngredient(ingredientId, quantity)
+      })
+    },
+
+    calculatePrice() {
+      let basePrice = 0
+
+      if (this.currentPizza.doughId) {
+        const dough = this.getDoughById(this.currentPizza.doughId)
+        if (dough) {
+          basePrice += dough.price
+        }
+      }
+
+      if (this.currentPizza.sauceId) {
+        const sauce = this.getSauceById(this.currentPizza.sauceId)
+        if (sauce) {
+          basePrice += sauce.price
+        }
+      }
+
+      this.currentPizza.ingredients.forEach(ing => {
+        const ingredient = this.getIngredientById(ing.ingredientId)
+        if (ingredient) {
+          basePrice += ingredient.price * ing.quantity
+        }
+      })
+
+      if (this.currentPizza.sizeId) {
+        const size = this.getSizeById(this.currentPizza.sizeId)
+        if (size) {
+          basePrice *= size.multiplier
+        }
+      }
+
+      this.currentPizza.price = Math.round(basePrice)
+    },
+
+    resetPizza() {
+      this.currentPizza = {
+        name: '',
+        sizeId: null,
+        doughId: null,
+        sauceId: null,
+        ingredients: [],
+        price: 0
+      }
+    },
+
+    getPizzaForCart() {
+      if (!this.isPizzaReady) {
+        throw new Error('Пицца не готова к добавлению в корзину')
+      }
+
+      const description = this.currentPizzaDescription
+
       return {
-        pizzas: this.items
-          .filter(item => item.type === 'pizza')
-          .map(pizza => ({
-            name: pizza.name,
-            sizeId: pizza.sizeId,
-            doughId: pizza.doughId,
-            sauceId: pizza.sauceId,
-            ingredients: pizza.ingredients || [],
-            quantity: pizza.quantity
-          })),
-        misc: this.items
-          .filter(item => item.type === 'misc')
-          .map(miscItem => ({
-            miscId: miscItem.miscId,
-            quantity: miscItem.quantity
-          })),
-        totalAmount: this.totalAmount
+        name: description.name,
+        sizeId: this.currentPizza.sizeId,
+        doughId: this.currentPizza.doughId,
+        sauceId: this.currentPizza.sauceId,
+        ingredients: this.currentPizza.ingredients,
+        size: description.size,
+        dough: description.dough,
+        sauce: description.sauce,
+        ingredientsText: description.ingredients,
+        price: this.currentPizza.price,
+      }
+    },
+
+    createFromTemplate(template) {
+      this.currentPizza.name = template.name || ''
+      this.currentPizza.sizeId = template.sizeId || null
+      this.currentPizza.doughId = template.doughId || null
+      this.currentPizza.sauceId = template.sauceId || null
+      this.currentPizza.ingredients = template.ingredients || []
+      this.calculatePrice()
+    },
+
+    saveAsTemplate(templateName) {
+      if (!this.isPizzaReady) return null
+
+      return {
+        name: templateName,
+        sizeId: this.currentPizza.sizeId,
+        doughId: this.currentPizza.doughId,
+        sauceId: this.currentPizza.sauceId,
+        ingredients: [...this.currentPizza.ingredients],
+        price: this.currentPizza.price,
+        createdAt: new Date().toISOString()
+      }
+    },
+
+    createMargarita() {
+      this.resetPizza()
+      this.currentPizza.name = 'Маргарита'
+    },
+
+    createPepperoni() {
+      this.resetPizza()
+      this.currentPizza.name = 'Пепперони'
+    },
+
+    addRandomIngredients(count = 3) {
+      if (this.ingredients.length === 0) return
+
+      const shuffled = [...this.ingredients].sort(() => 0.5 - Math.random())
+      const selected = shuffled.slice(0, count)
+
+      selected.forEach(ingredient => {
+        this.addIngredient(ingredient.id, quantity)
+      })
+    },
+
+    validatePizza() {
+      const errors = []
+
+      if (!this.currentPizza.name) {
+        errors.push('Не указано название пиццы')
+      }
+
+      if (!this.currentPizza.sizeId) {
+        errors.push('Не выбран размер пиццы')
+      }
+
+      if (!this.currentPizza.doughId) {
+        errors.push('Не выбрано тесто')
+      }
+
+      if (!this.currentPizza.sauceId) {
+        errors.push('Не выбран соус')
+      }
+
+      if (this.currentPizza.ingredients.length === 0) {
+        errors.push('Не выбраны ингредиенты')
+      }
+
+      return {
+        isValid: errors.length === 0,
+        errors
       }
     }
   }

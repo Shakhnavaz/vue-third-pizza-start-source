@@ -60,9 +60,11 @@
     </form>
 
 
-    <div v-if="isDraggingIngredient" class="drag-notification">
-      <p>💫 Перетащите ингредиент на пиццу для добавления</p>
-    </div>
+    <Transition name="fade">
+      <div v-if="isDraggingIngredient" class="drag-notification">
+        <p>💫 Перетащите ингредиент на пиццу для добавления</p>
+      </div>
+    </Transition>
 
 
     <div v-if="showDebugInfo" class="debug-panel">
@@ -102,17 +104,11 @@ export default {
     const cartStore = useCartStore();
     const dataStore = useDataStore();
 
-
-
-
-
     const isDraggingIngredient = ref(false);
-
     const showDebugInfo = ref(import.meta.env.DEV);
 
     onMounted(async () => {
       await pizzaStore.loadConstructorData();
-
     });
 
     const totalPrice = computed(() => pizzaStore.currentPizza.price);
@@ -150,7 +146,6 @@ export default {
         ingredientsInfo: pizzaStore.selectedIngredientsDetails.length > 0 
           ? ingredientsList.value
           : "не выбраны",
-
       };
     });
 
@@ -246,7 +241,6 @@ ${validation.errors.map((field) => `• ${field}`).join("\n")}`);
 
     const resetPizzaState = () => {
       pizzaStore.resetPizza();
-
       console.log("🔄 Состояние пиццы сброшено");
     };
 
