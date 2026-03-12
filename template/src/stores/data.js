@@ -31,32 +31,43 @@ export const useDataStore = defineStore('data', {
       global: null
     },
 
-    // Кеш для API данных
+    // Кеш для API данных (соответствует реальным эндпоинтам)
     cache: {
       ingredients: {
         data: [],
         lastUpdated: null,
-        ttl: 5 * 60 * 1000 // 5 минут
+        ttl: 5 * 60 * 1000, // 5 минут
+        endpoint: '/ingredients'
       },
       sizes: {
         data: [],
         lastUpdated: null,
-        ttl: 10 * 60 * 1000 // 10 минут
+        ttl: 10 * 60 * 1000, // 10 минут  
+        endpoint: '/sizes'
       },
       doughs: {
         data: [],
         lastUpdated: null,
-        ttl: 10 * 60 * 1000 // 10 минут
+        ttl: 10 * 60 * 1000, // 10 минут
+        endpoint: '/dough'
       },
       sauces: {
         data: [],
         lastUpdated: null,
-        ttl: 10 * 60 * 1000 // 10 минут
+        ttl: 10 * 60 * 1000, // 10 минут
+        endpoint: '/sauces'
       },
       pizzas: {
         data: [],
         lastUpdated: null,
-        ttl: 5 * 60 * 1000 // 5 минут
+        ttl: 5 * 60 * 1000, // 5 минут
+        endpoint: '/pizzas'
+      },
+      misc: {
+        data: [],
+        lastUpdated: null,
+        ttl: 5 * 60 * 1000, // 5 минут
+        endpoint: '/misc'
       }
     },
 
@@ -79,7 +90,7 @@ export const useDataStore = defineStore('data', {
     isCacheExpired: (state) => (type) => {
       const cache = state.cache[type]
       if (!cache || !cache.lastUpdated) return true
-      
+
       const now = Date.now()
       return (now - cache.lastUpdated) > cache.ttl
     },
@@ -129,7 +140,7 @@ export const useDataStore = defineStore('data', {
       const deliveryPrice = orderAmount >= state.appConfig.freeDeliveryThreshold 
         ? 0 
         : state.appConfig.deliveryPrice
-      
+
       return orderAmount + deliveryPrice
     }
   },
@@ -193,7 +204,7 @@ export const useDataStore = defineStore('data', {
     },
 
     // Загрузить данные с проверкой кеша
-    async loadDataWithCache(type, apiCall) {
+    async loadDataWithCache(type, customApiCall = null) {
       // Проверяем кеш
       if (!this.isCacheExpired(type)) {
         return this.getCachedData(type)
@@ -203,13 +214,30 @@ export const useDataStore = defineStore('data', {
       this.clearError(type)
 
       try {
-        const data = await apiCall()
+        let data
+        
+        if (customApiCall) {
+          data = await customApiCall()
+        } else {
+          // Используем встроенный эндпоинт из кеша
+          const cacheConfig = this.cache[type]
+          if (!cacheConfig || !cacheConfig.endpoint) {
+            throw new Error(`Не найден эндпоинт для ${type}`)
+          }
+          
+          const response = await fetch(cacheConfig.endpoint)
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+          }
+          data = await response.json()
+        }
+        
         this.cacheData(type, data)
         return data
       } catch (error) {
         this.setError(type, error.message)
         console.error(`Ошибка загрузки ${type}:`, error)
-        
+
         // Возвращаем кешированные данные если есть
         return this.getCachedData(type)
       } finally {
@@ -220,7 +248,7 @@ export const useDataStore = defineStore('data', {
     // Обновить настройки приложения
     updateSettings(newSettings) {
       this.settings = { ...this.settings, ...newSettings }
-      
+
       // Сохраняем в localStorage
       try {
         localStorage.setItem('app-settings', JSON.stringify(this.settings))
@@ -251,9 +279,9 @@ export const useDataStore = defineStore('data', {
         timestamp: new Date().toISOString(),
         url: window.location.pathname
       }
-      
+
       this.analytics.userActions.push(eventData)
-      
+
       // Ограничиваем количество событий в памяти
       if (this.analytics.userActions.length > 100) {
         this.analytics.userActions = this.analytics.userActions.slice(-50)
@@ -266,7 +294,7 @@ export const useDataStore = defineStore('data', {
         this.analytics.pageViews[path] = 0
       }
       this.analytics.pageViews[path]++
-      
+
       this.trackEvent('page_view', { path })
     },
 
@@ -289,13 +317,13 @@ export const useDataStore = defineStore('data', {
     async initialize() {
       try {
         this.setGlobalLoading(true)
-        
+
         // Загружаем настройки
         this.loadSettings()
-        
+
         // Здесь можно загрузить другие начальные данные
         // await this.loadInitialData()
-        
+
       } catch (error) {
         this.setGlobalError(error.message)
         console.error('Ошибка инициализации приложения:', error)
@@ -308,12 +336,12 @@ export const useDataStore = defineStore('data', {
     reset() {
       this.clearAllCache()
       this.clearAllErrors()
-      
+
       // Сбрасываем загрузки
       Object.keys(this.loading).forEach(key => {
         this.loading[key] = false
       })
-      
+
       // Очищаем аналитику
       this.analytics = {
         pageViews: {},

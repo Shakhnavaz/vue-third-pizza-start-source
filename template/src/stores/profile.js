@@ -2,23 +2,28 @@ import { defineStore } from 'pinia'
 
 export const useProfileStore = defineStore('profile', {
   state: () => ({
-    // Данные пользователя
+    // Данные пользователя (согласно User model)
     user: {
       id: null,
       name: '',
-      phone: '',
+
       email: '',
+      phone: '',
       avatar: null
     },
 
-    // Адреса доставки
-    addresses: [],
-    
-    // Выбранный адрес для текущего заказа
-    selectedAddress: null,
+    // Адреса доставки (согласно Address model)
+    addresses: [
+      // { id: number, name: string, street: string, building: string, flat: string, comment?: string }
+    ],
 
-    // История заказов
-    orderHistory: [],
+    // Выбранный адрес для текущего заказа
+    selectedAddressId: null,
+
+    // История заказов (согласно Order model)
+    orderHistory: [
+      // { id: number, phone?: string, pizzas: IPizza[], misc: IMisc[], address: Address }
+    ],
 
     // Состояние аутентификации
     isAuthenticated: false,
@@ -48,6 +53,11 @@ export const useProfileStore = defineStore('profile', {
     // Получить основной адрес
     primaryAddress: (state) => {
       return state.addresses.find(addr => addr.isPrimary) || state.addresses[0] || null
+    },
+
+    // Получить выбранный адрес
+    selectedAddress: (state) => {
+      return state.addresses.find(addr => addr.id === state.selectedAddressId) || null
     },
 
     // Получить адрес по ID
@@ -94,11 +104,11 @@ export const useProfileStore = defineStore('profile', {
     async login(credentials) {
       this.isLoading = true
       this.error = null
-      
+
       try {
         // TODO: Заменить на реальный API вызов
         // const response = await authAPI.login(credentials)
-        
+
         // Временная заглушка
         this.user = {
           id: 1,
@@ -107,15 +117,15 @@ export const useProfileStore = defineStore('profile', {
           email: credentials.email || 'test@example.com',
           avatar: null
         }
-        
+
         this.isAuthenticated = true
-        
+
         // Загружаем данные пользователя
         await Promise.all([
           this.loadAddresses(),
           this.loadOrderHistory()
         ])
-        
+
       } catch (error) {
         this.error = error.message
         console.error('Ошибка авторизации:', error)
@@ -145,13 +155,13 @@ export const useProfileStore = defineStore('profile', {
     async updateProfile(userData) {
       this.isLoading = true
       this.error = null
-      
+
       try {
         // TODO: Заменить на реальный API вызов
         // const response = await profileAPI.update(userData)
-        
+
         this.user = { ...this.user, ...userData }
-        
+
       } catch (error) {
         this.error = error.message
         console.error('Ошибка обновления профиля:', error)
@@ -164,11 +174,11 @@ export const useProfileStore = defineStore('profile', {
     // Загрузить адреса пользователя
     async loadAddresses() {
       if (!this.isAuthenticated) return
-      
+
       try {
         // TODO: Заменить на реальный API вызов
         // const response = await addressAPI.getAll()
-        
+
         // Временная заглушка
         this.addresses = [
           {
@@ -181,7 +191,7 @@ export const useProfileStore = defineStore('profile', {
             isPrimary: true
           }
         ]
-        
+
       } catch (error) {
         console.error('Ошибка загрузки адресов:', error)
       }
@@ -191,21 +201,21 @@ export const useProfileStore = defineStore('profile', {
     async addAddress(addressData) {
       this.isLoading = true
       this.error = null
-      
+
       try {
         // TODO: Заменить на реальный API вызов
         // const response = await addressAPI.create(addressData)
-        
+
         const newAddress = {
           id: Date.now(),
           ...addressData,
           isPrimary: this.addresses.length === 0
         }
-        
+
         this.addresses.push(newAddress)
-        
+
         return newAddress
-        
+
       } catch (error) {
         this.error = error.message
         console.error('Ошибка добавления адреса:', error)
@@ -219,16 +229,16 @@ export const useProfileStore = defineStore('profile', {
     async updateAddress(addressId, addressData) {
       this.isLoading = true
       this.error = null
-      
+
       try {
         // TODO: Заменить на реальный API вызов
         // const response = await addressAPI.update(addressId, addressData)
-        
+
         const index = this.addresses.findIndex(addr => addr.id === addressId)
         if (index !== -1) {
           this.addresses[index] = { ...this.addresses[index], ...addressData }
         }
-        
+
       } catch (error) {
         this.error = error.message
         console.error('Ошибка обновления адреса:', error)
@@ -242,21 +252,21 @@ export const useProfileStore = defineStore('profile', {
     async deleteAddress(addressId) {
       this.isLoading = true
       this.error = null
-      
+
       try {
         // TODO: Заменить на реальный API вызов
         // await addressAPI.delete(addressId)
-        
+
         const index = this.addresses.findIndex(addr => addr.id === addressId)
         if (index !== -1) {
           this.addresses.splice(index, 1)
         }
-        
+
         // Если удален выбранный адрес, сбрасываем выбор
         if (this.selectedAddress === addressId) {
           this.selectedAddress = null
         }
-        
+
       } catch (error) {
         this.error = error.message
         console.error('Ошибка удаления адреса:', error)
@@ -268,20 +278,20 @@ export const useProfileStore = defineStore('profile', {
 
     // Выбрать адрес для доставки
     selectAddress(addressId) {
-      this.selectedAddress = addressId
+      this.selectedAddressId = addressId
     },
 
     // Загрузить историю заказов
     async loadOrderHistory() {
       if (!this.isAuthenticated) return
-      
+
       try {
         // TODO: Заменить на реальный API вызов
         // const response = await ordersAPI.getHistory()
-        
+
         // Временная заглушка
         this.orderHistory = []
-        
+
       } catch (error) {
         console.error('Ошибка загрузки истории заказов:', error)
       }
